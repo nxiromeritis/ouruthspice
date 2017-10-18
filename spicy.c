@@ -45,8 +45,10 @@ int main(int argc, char *argv[]) {
 	print_list2();
 	print_sec_list();
 
+
 	init_MNA_system();
 	fill_MNA_system();
+	print_MNA_system();
 	free_MNA_system();
 
 	freeHashTable();

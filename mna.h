@@ -8,4 +8,5 @@ extern unsigned long mna_dimension_size;
 extern void init_MNA_system();
 extern void fill_MNA_system();
 extern void free_MNA_system();
+extern void print_MNA_system();
 #endif
