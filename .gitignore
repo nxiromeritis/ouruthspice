@@ -6,3 +6,5 @@ spicy
 .*.*.swp
 .*.swp
 *.vim
+*.txt
+*.out
