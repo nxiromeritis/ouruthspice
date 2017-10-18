@@ -14,13 +14,6 @@ colors: $(OBJ)
 	@echo "\nBuild with colored output.."
 	$(CC) $(OBJ) -o $(EXECUTABLE)
 
-
-
-# make test_hashtable to jus test the hash table
-test_hashtable: hashtable.o test.o
-	$(CC) hashtable.o test.o -o test	
-
-
 %.o: %.c %.h
 	$(CC) $(CFLAGS) $(DFLAGS) -c $< -o $@
 
