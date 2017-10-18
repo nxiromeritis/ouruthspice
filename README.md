@@ -1,1 +1,3 @@
-# oututhspice
+# Spicy
+
+Spice Emulator

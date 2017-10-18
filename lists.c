@@ -28,11 +28,17 @@ void free_lists(){
 	}
 	free(team1_list.list);
 	team1_list.size = 0;
+
 	for(i=0; i < team2_list.size; i++) {
 		free(team2_list.list[i].name);
 	}
 	free(team2_list.list);
 	team2_list.size = 0;
+
+	for(i=0; i < team2_list.size; i++) {
+		free(sec_list.list[i].name);
+		free(sec_list.list[i].model_name);
+	}
 	free(sec_list.list);
 	sec_list.size = 0;
 }
@@ -62,7 +68,7 @@ int insert_element(list_head *list, c_type type, char *name, element_h *node_plu
 	return 0;
 }
 
-int insert_bjt(char *name, char *model_name){
+int insert_bjt(char *name, element_h *node_c, element_h *node_b, element_h *node_e, char *model_name){
 	sec_list_element *tmp;
 
 	tmp = realloc(sec_list.list, ((sec_list.size + 1) * sizeof(sec_list_element)));
@@ -72,19 +78,25 @@ int insert_bjt(char *name, char *model_name){
 
 	sec_list.list[sec_list.size].type = Q;
 
-	// TODO strdup
-	sec_list.list[sec_list.size].name = name;
+	sec_list.list[sec_list.size].name = strdup(name);
+	if (sec_list.list[sec_list.size].name == NULL)
+		return -1;
 
 	// nodes
-	// TODO
-	sec_list.list[sec_list.size].model_name = model_name;
+	sec_list.list[sec_list.size].character.bjt.node_c = node_c;
+	sec_list.list[sec_list.size].character.bjt.node_b = node_b;
+	sec_list.list[sec_list.size].character.bjt.node_e = node_e;
+
+	sec_list.list[sec_list.size].model_name = strdup(model_name);
+	if (sec_list.list[sec_list.size].model_name == NULL)
+		return -1;
 
 	sec_list.size++;
 
 	return 0;
 }
 
-int insert_diode(char *name, char *model_name){
+int insert_diode(char *name, element_h *node_plus, element_h *node_minus, char *model_name){
 	sec_list_element *tmp;
 
 	tmp = realloc(sec_list.list, ((sec_list.size + 1) * sizeof(sec_list_element)));
@@ -94,19 +106,24 @@ int insert_diode(char *name, char *model_name){
 
 	sec_list.list[sec_list.size].type = D;
 
-	// TODO strdup
-	sec_list.list[sec_list.size].name = name;
+	sec_list.list[sec_list.size].name = strdup(name);
+	if (sec_list.list[sec_list.size].name == NULL)
+		return -1;
 
 	// nodes
-	// TODO
-	sec_list.list[sec_list.size].model_name = model_name;
+	sec_list.list[sec_list.size].character.diode.node_plus = node_plus;
+	sec_list.list[sec_list.size].character.diode.node_minus = node_minus;
+	
+	sec_list.list[sec_list.size].model_name = strdup(model_name);
+	if (sec_list.list[sec_list.size].model_name == NULL)
+		return -1;
 
 	sec_list.size++;
 
 	return 0;
 }
 
-int insert_mos(char *name, char *model_name){
+int insert_mos(char *name, element_h *node_d, element_h *node_g, element_h *node_s, element_h *node_b, long l, long w, char *model_name){
 	sec_list_element *tmp;
 
 	tmp = realloc(sec_list.list, ((sec_list.size + 1) * sizeof(sec_list_element)));
@@ -116,12 +133,21 @@ int insert_mos(char *name, char *model_name){
 
 	sec_list.list[sec_list.size].type = M;
 
-	// TODO strdup
-	sec_list.list[sec_list.size].name = name;
+	sec_list.list[sec_list.size].name = strdup(name);
+	if (sec_list.list[sec_list.size].name == NULL)
+		return -1;
 
 	// nodes
-	// TODO
-	sec_list.list[sec_list.size].model_name = model_name;
+	sec_list.list[sec_list.size].character.mos.node_d = node_d;
+	sec_list.list[sec_list.size].character.mos.node_g = node_g;
+	sec_list.list[sec_list.size].character.mos.node_s = node_s;
+	sec_list.list[sec_list.size].character.mos.node_b = node_b;
+	sec_list.list[sec_list.size].character.mos.l = l;
+	sec_list.list[sec_list.size].character.mos.w = w;
+
+	sec_list.list[sec_list.size].model_name = strdup(model_name);
+	if (sec_list.list[sec_list.size].model_name == NULL)
+		return -1;
 
 	sec_list.size++;
 
@@ -129,125 +155,143 @@ int insert_mos(char *name, char *model_name){
 }
 
 void print_list1 (){
-	printf("\n%s"
+	printf("\n" BLU
 	       "-----------------------------\n"
 	       "-- List of Team 1 Elements --\n"
 	       "-----------------------------\n"
-	       "---->Size: %s%lu%s\n"
+	       "---->Size: " CYN "%lu\n" BLU
 	       "-----------------------------\n"
 	       "-----------------------------\n",
-	       BLU, CYN, team1_list.size, BLU);
+	       team1_list.size);
 
 	for (unsigned long i = 0; i < team1_list.size; i++){
-		printf("------>Name: %s%s%s\n"
-			   "-----------------------------\n", CYN, team1_list.list[i].name, BLU);
+		printf("------>Name: " CYN "%s\n" BLU
+			   "-----------------------------\n", team1_list.list[i].name);
 		switch(team1_list.list[i].type){
 			case R:
-				printf("-------->Type: %sResistor%s\n", CYN, BLU);
+				printf("-------->Type: " CYN "Resistor\n" BLU);
 				break;
 			case C:
-				printf("-------->Type: %sCapacitor%s\n", CYN, BLU);
+				printf("-------->Type: " CYN "Capacitor\n" BLU);
 				break;
 			case I:
-				printf("-------->Type: %sCurrent Source%s\n", CYN, BLU);
+				printf("-------->Type: " CYN "Current Source\n" BLU);
 				break;
 			default:
 				break;
 		}
-		printf("-------->Node (+): %s%s%s\n"
-		       "-------->Node (-): %s%s%s\n"
-		       "-------->Value: %s%lf%s\n"
+		printf("-------->Node (+): " CYN "%s\n" BLU
+		       "-------->Node (-): " CYN "%s\n" BLU
+		       "-------->Value: " CYN "%lf\n" BLU
 		       "-----------------------------\n",
-		       CYN, team1_list.list[i].node_plus->name, BLU,
-			   CYN, team1_list.list[i].node_minus->name, BLU,
-			   CYN, team1_list.list[i].value, BLU);
+		       team1_list.list[i].node_plus->name,
+			   team1_list.list[i].node_minus->name,
+			   team1_list.list[i].value);
 	}
 	printf("------- End of List 1 -------\n"
-	       "-----------------------------%s\n", NRM);
+	       "-----------------------------\n" NRM);
 }
 
 void print_list2 (){
-	printf("\n%s"
+	printf("\n" BLU
 	       "-----------------------------\n"
 	       "-- List of Team 2 Elements --\n"
 	       "-----------------------------\n"
-	       "---->Size: %s%lu%s\n"
+	       "---->Size: " CYN "%lu\n" BLU
 	       "-----------------------------\n"
 	       "-----------------------------\n",
-	       BLU, CYN, team2_list.size, BLU);
+	       team2_list.size);
 
 	for (unsigned long i = 0; i < team2_list.size; i++){
-		printf("------>Name: %s%s%s\n"
-			   "-----------------------------\n", CYN, team2_list.list[i].name, BLU);
+		printf("------>Name: " CYN "%s\n" BLU
+			   "-----------------------------\n", team2_list.list[i].name);
 		switch(team2_list.list[i].type){
+			case R:
+				printf("-------->Type: " CYN "Resistor [G2]\n" BLU);
+				break;
 			case L:
-				printf("-------->Type: %sInductor%s\n", CYN, BLU);
+				printf("-------->Type: " CYN "Inductor\n" BLU);
+				break;
+			case C:
+				printf("-------->Type: " CYN "Capacitor [G2]\n" BLU);
 				break;
 			case V:
-				printf("-------->Type: %sVoltage Source%s\n", CYN, BLU);
+				printf("-------->Type: " CYN "Voltage Source\n" BLU);
+				break;
+			case I:
+				printf("-------->Type: " CYN "Current Source [G2]\n" BLU);
 				break;
 			default:
 				break;
 		}
-		printf("-------->Node (+): %s%s%s\n"
-		       "-------->Node (-): %s%s%s\n"
-		       "-------->Value: %s%lf%s\n"
+		printf("-------->Node (+): " CYN "%s\n" BLU
+		       "-------->Node (-): " CYN "%s\n" BLU
+		       "-------->Value: " CYN "%lf\n" BLU
 		       "-----------------------------\n",
-		       CYN, team2_list.list[i].node_plus->name, BLU,
-			   CYN, team2_list.list[i].node_minus->name, BLU,
-			   CYN, team2_list.list[i].value, BLU);
+		       team2_list.list[i].node_plus->name,
+			   team2_list.list[i].node_minus->name,
+			   team2_list.list[i].value);
 	}
 	printf("------- End of List 2 -------\n"
-	       "-----------------------------%s\n", NRM);
+	       "-----------------------------\n" NRM);
 }
 
 void print_sec_list (){
-	printf("\n%s"
+	printf("\n" BLU
 	       "-----------------------------\n"
 	       "-- List of Unused Elements --\n"
 	       "-----------------------------\n"
-	       "---->Size: %s%lu%s\n"
+	       "---->Size: " CYN "%lu\n" BLU
 	       "-----------------------------\n"
 	       "-----------------------------\n",
-	       BLU, CYN, sec_list.size, BLU);
+	       sec_list.size);
 
 	for (unsigned long i = 0; i < sec_list.size; i++){
-		printf("------>Name: %s%s%s\n"
-			   "-----------------------------\n", CYN, sec_list.list[i].name, BLU);
+		printf("------>Name: " CYN "%s\n" BLU
+			   "-----------------------------\n", sec_list.list[i].name);
 		switch(sec_list.list[i].type){
 			case D:
-				printf("-------->Type: %sDiode%s\n"
-				       "-------->Node (+): %s%s\n"
-				       "-------->Node (-): %s%s\n"
-				       "-------->Model name: %s%s%s\n"
+				printf("-------->Type: " CYN "Diode\n" BLU
+				       "-------->Node (+): " CYN "%s\n" BLU
+				       "-------->Node (-): " CYN "%s\n" BLU
+				       "-------->Model name: " CYN "%s\n" BLU
 				       "-----------------------------\n",
-				       CYN, BLU, CYN, BLU, CYN, BLU, CYN, sec_list.list[i].model_name, BLU);
+				       sec_list.list[i].character.diode.node_plus->name,
+				       sec_list.list[i].character.diode.node_minus->name,
+				       sec_list.list[i].model_name);
 				break;
 			case M:
-				printf("-------->Type: %sMOS Transistor%s\n"
-				       "-------->Node (D): %s%s\n"
-				       "-------->Node (G): %s%s\n"
-				       "-------->Node (S): %s%s\n"
-				       "-------->Node (B): %s%s\n"
-				       "-------->Model name: %s%s%s\n"
+				printf("-------->Type: " CYN "MOS Transistor\n" BLU
+				       "-------->Node (D): " CYN "%s\n" BLU
+				       "-------->Node (G): " CYN "%s\n" BLU
+				       "-------->Node (S): " CYN "%s\n" BLU
+				       "-------->Node (B): " CYN "%s\n" BLU
+				       "-------->Model name: " CYN "%s\n" BLU
 				       "-----------------------------\n",
-				       CYN, BLU, CYN, BLU, CYN, BLU, CYN, BLU, CYN, BLU, CYN, sec_list.list[i].model_name, BLU);
+				       sec_list.list[i].character.mos.node_d->name,
+				       sec_list.list[i].character.mos.node_g->name,
+				       sec_list.list[i].character.mos.node_s->name,
+				       sec_list.list[i].character.mos.node_b->name,
+				       sec_list.list[i].model_name);
 				break;
 			case Q:
-				printf("-------->Type: %sBJT Transistor%s\n"
-				       "-------->Node (C): %s%s\n"
-				       "-------->Node (B): %s%s\n"
-				       "-------->Node (E): %s%s\n"
-				       "-------->Model name: %s%s%s\n"
+				printf("-------->Type: " CYN "BJT Transistor\n" BLU
+				       "-------->Node (C): " CYN "%s\n" BLU
+				       "-------->Node (B): " CYN "%s\n" BLU
+				       "-------->Node (E): " CYN "%s\n" BLU
+				       "-------->Model name: " CYN "%s\n" BLU
 				       "-----------------------------\n",
-				       CYN, BLU, CYN, BLU, CYN, BLU, CYN, BLU, CYN, sec_list.list[i].model_name, BLU);
+				       sec_list.list[i].character.bjt.node_c->name,
+				       sec_list.list[i].character.bjt.node_b->name,
+				       sec_list.list[i].character.bjt.node_e->name,
+				       sec_list.list[i].model_name);
 				break;
 			default:
 				break;
 		}
 	}
 	printf("-------- End of List --------\n"
-	       "-----------------------------%s\n", NRM);
+	       "-----------------------------\n" NRM);
 }
 
 /*int main(){*/

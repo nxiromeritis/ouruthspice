@@ -62,9 +62,9 @@ void free_lists();
 
 int insert_element(list_head *list, c_type type, char *name, element_h *node_plus, element_h *node_minus, double value);
 
-int insert_bjt(char *name, char *model_name);
-int insert_diode(char *name, char *model_name);
-int insert_mos(char *name, char *model_name);
+int insert_bjt(char *name, element_h *node_c, element_h *node_b, element_h *node_e, char *model_name);
+int insert_diode(char *name, element_h *node_plus, element_h *node_minus, char *model_name);
+int insert_mos(char *name, element_h *node_d, element_h *node_g, element_h *node_s, element_h *node_b, long l, long w, char *model_name);
 
 void print_list1();
 void print_list2();
