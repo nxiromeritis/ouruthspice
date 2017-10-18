@@ -28,7 +28,7 @@ extern void ht_init(unsigned long size);
 extern unsigned long hs_function(unsigned long size_hs, char *name);
 extern element_h *newElement(char *name,unsigned long id);
 extern element_h *ht_put(char *name, unsigned long id);
-extern void ht_get(char *name,element_h **getElement);
+extern element_h * ht_get(char *name);
 extern void printHastable();
 extern void freeHashTable();
 

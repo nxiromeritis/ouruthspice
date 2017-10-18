@@ -10,7 +10,7 @@ list_head team1_list;
 list_head team2_list;
 sec_list_head sec_list;
 
-
+// Initialize the lists
 void init_lists(){
 	team1_list.size = 0;
 	team2_list.size = 0;
@@ -20,6 +20,7 @@ void init_lists(){
 	sec_list.list = NULL;
 }
 
+// Free the lists and teir allocated fields
 void free_lists(){
 	unsigned long i;
 
@@ -43,6 +44,7 @@ void free_lists(){
 	sec_list.size = 0;
 }
 
+// Insert an element into one of the two lists
 int insert_element(list_head *list, c_type type, char *name, element_h *node_plus, element_h *node_minus, double value){
 	list_element *tmp;
 
@@ -68,6 +70,7 @@ int insert_element(list_head *list, c_type type, char *name, element_h *node_plu
 	return 0;
 }
 
+// Insert a BJT Transistor to the sec_list
 int insert_bjt(char *name, element_h *node_c, element_h *node_b, element_h *node_e, char *model_name){
 	sec_list_element *tmp;
 
@@ -96,6 +99,7 @@ int insert_bjt(char *name, element_h *node_c, element_h *node_b, element_h *node
 	return 0;
 }
 
+// Inser a Diode into the sec_list
 int insert_diode(char *name, element_h *node_plus, element_h *node_minus, char *model_name){
 	sec_list_element *tmp;
 
@@ -123,6 +127,7 @@ int insert_diode(char *name, element_h *node_plus, element_h *node_minus, char *
 	return 0;
 }
 
+// Insert a MOS Transistor into the sec_list
 int insert_mos(char *name, element_h *node_d, element_h *node_g, element_h *node_s, element_h *node_b, long l, long w, char *model_name){
 	sec_list_element *tmp;
 
@@ -154,6 +159,7 @@ int insert_mos(char *name, element_h *node_d, element_h *node_g, element_h *node
 	return 0;
 }
 
+// Print the elements of the team1_list
 void print_list1 (){
 	printf("\n" BLU
 	       "-----------------------------\n"
@@ -192,6 +198,7 @@ void print_list1 (){
 	       "-----------------------------\n" NRM);
 }
 
+// Print the elements of the team2_list
 void print_list2 (){
 	printf("\n" BLU
 	       "-----------------------------\n"
@@ -236,6 +243,7 @@ void print_list2 (){
 	       "-----------------------------\n" NRM);
 }
 
+// Print the elements of the sec_list
 void print_sec_list (){
 	printf("\n" BLU
 	       "-----------------------------\n"
@@ -294,18 +302,20 @@ void print_sec_list (){
 	       "-----------------------------\n" NRM);
 }
 
-/*int main(){*/
-	/*init_lists();*/
+#ifdef STANDALONE
+int main(){
+	init_lists();
 
-	/*int i = insert_element(&team1_list, R, "1", 5e-3);*/
-	/*if (!(i==0))*/
-		/*printf("Shit!\n");*/
+	int i = insert_element(&team1_list, R, "1", 5e-3);
+	if (!(i==0))
+		printf("Shit!\n");
 
-	/*print_list1();*/
-	/*print_list2();*/
-	/*print_sec_list();*/
+	print_list1();
+	print_list2();
+	print_sec_list();
 
-	/*free_lists();*/
+	free_lists();
 
-	/*return 0;*/
-/*}*/
+	return 0;
+}
+#endif

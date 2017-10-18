@@ -128,6 +128,8 @@ void parse_cir(char *filename) {
 	unsigned long id = 0;
 	element_h *node1 = NULL;
 	element_h *node2 = NULL;
+	element_h *node3 = NULL;
+	element_h *node4 = NULL;
 
 	// used for parsing
 	char *line = NULL;		// the line parsed
@@ -412,27 +414,33 @@ void parse_cir(char *filename) {
 			case 'I':
 			case 'R':
 			case 'C':
-				ht_get(node1_name, &node1);
+				node1 = ht_get(node1_name);
 				if (node1 == NULL) {
 					id++;
 					node1 = ht_put(node1_name, id);
 				}
 
 
-				ht_get(node2_name, &node2);
+				node2 = ht_get(node2_name);
 				if (node2 == NULL) {
 					id++;
 					node2 = ht_put(node2_name, id);
 				}
 
-				// we have node pointer in getElement
 				// add component to node component list (hashtable field)
 				// update components list (lists)
-
-				if (insert_element(&team1_list, (toupper(type)=='I'?I:(toupper(type)=='R'?R:C)), \
-									name, node1, node2, val) == -1) {
-					printf("insert_element. Memory allocation problems. Exiting..\n");
-					exit(EXIT_FAILURE);
+				if (has_G2 == 0){
+					if (insert_element(&team1_list, (toupper(type)=='I'?I:(toupper(type)=='R'?R:C)), \
+										name, node1, node2, val) == -1) {
+						printf("insert_element. Memory allocation problems. Exiting..\n");
+						exit(EXIT_FAILURE);
+					}
+				}else{
+					if (insert_element(&team2_list, (toupper(type)=='I'?I:(toupper(type)=='R'?R:C)), \
+										name, node1, node2, val) == -1) {
+						printf("insert_element. Memory allocation problems. Exiting..\n");
+						exit(EXIT_FAILURE);
+					}
 				}
 
 				break;
@@ -440,20 +448,19 @@ void parse_cir(char *filename) {
 			case 'V':
 			case 'L':
 
-				ht_get(node1_name, &node1);
+				node1 = ht_get(node1_name);
 				if (node1 == NULL) {
 					id++;
 					node1 = ht_put(node1_name, id);
 				}
 
 
-				ht_get(node2_name, &node2);
+				node2 = ht_get(node2_name);
 				if (node2 == NULL) {
 					id++;
 					node2 = ht_put(node2_name, id);
 				}
 
-				// we have node pointer in getElement
 				// add component to node component list (hashtable field)
 				// update components list (lists)
 				if (insert_element(&team2_list, (toupper(type)=='V'?V:L), name, node1, node2, val) == -1) {
@@ -463,11 +470,88 @@ void parse_cir(char *filename) {
 
 				break;
 			case 'D':
+
+				node1 = ht_get(node1_name);
+				if (node1 == NULL) {
+					id++;
+					node1 = ht_put(node1_name, id);
+				}
+
+
+				node2 = ht_get(node2_name);
+				if (node2 == NULL) {
+					id++;
+					node2 = ht_put(node2_name, id);
+				}
+
+				if (insert_diode(name, node1, node2, model_name) == -1){
+					printf("insert_element. Memory allocation problems. Exiting..\n");
+					exit(EXIT_FAILURE);
+				}
+
 				break;
 			case 'M':
 
+				node1 = ht_get(node1_name);
+				if (node1 == NULL) {
+					id++;
+					node1 = ht_put(node1_name, id);
+				}
+
+
+				node2 = ht_get(node2_name);
+				if (node2 == NULL) {
+					id++;
+					node2 = ht_put(node2_name, id);
+				}
+
+
+				node3 = ht_get(node3_name);
+				if (node3 == NULL) {
+					id++;
+					node3 = ht_put(node3_name, id);
+				}
+
+
+				node4 = ht_get(node4_name);
+				if (node4 == NULL) {
+					id++;
+					node4 = ht_put(node4_name, id);
+				}
+
+				if (insert_mos(name, node1, node2, node3, node4, l, w, model_name) == -1){
+					printf("insert_element. Memory allocation problems. Exiting..\n");
+					exit(EXIT_FAILURE);
+				}
+
+
 				break;
 			case 'Q':
+
+				node1 = ht_get(node1_name);
+				if (node1 == NULL) {
+					id++;
+					node1 = ht_put(node1_name, id);
+				}
+
+
+				node2 = ht_get(node2_name);
+				if (node2 == NULL) {
+					id++;
+					node2 = ht_put(node2_name, id);
+				}
+
+
+				node3 = ht_get(node3_name);
+				if (node3 == NULL) {
+					id++;
+					node3 = ht_put(node3_name, id);
+				}
+
+				if (insert_bjt(name, node1, node2, node3, model_name) == -1){
+					printf("insert_element. Memory allocation problems. Exiting..\n");
+					exit(EXIT_FAILURE);
+				}
 
 				break;
 			default :

@@ -3,6 +3,7 @@
 
 #include "hashtable.h"
 
+
 typedef struct RLCS_list_element {
 	c_type type;
 	char *name;
@@ -57,17 +58,17 @@ extern list_head team1_list;
 extern list_head team2_list;
 extern sec_list_head sec_list;
 
-void init_lists();
-void free_lists();
+extern void init_lists();
+extern void free_lists();
 
-int insert_element(list_head *list, c_type type, char *name, element_h *node_plus, element_h *node_minus, double value);
+extern int insert_element(list_head *list, c_type type, char *name, element_h *node_plus, element_h *node_minus, double value);
 
-int insert_bjt(char *name, element_h *node_c, element_h *node_b, element_h *node_e, char *model_name);
-int insert_diode(char *name, element_h *node_plus, element_h *node_minus, char *model_name);
-int insert_mos(char *name, element_h *node_d, element_h *node_g, element_h *node_s, element_h *node_b, long l, long w, char *model_name);
+extern int insert_bjt(char *name, element_h *node_c, element_h *node_b, element_h *node_e, char *model_name);
+extern int insert_diode(char *name, element_h *node_plus, element_h *node_minus, char *model_name);
+extern int insert_mos(char *name, element_h *node_d, element_h *node_g, element_h *node_s, element_h *node_b, long l, long w, char *model_name);
 
-void print_list1();
-void print_list2();
-void print_sec_list();
+extern void print_list1();
+extern void print_list2();
+extern void print_sec_list();
 
 #endif

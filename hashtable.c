@@ -156,7 +156,7 @@ element_h *ht_put(char *name, unsigned long id) {
 // searches for name_element.
 // - getElement is NULL if name not found
 //	 otherwise it contains the pointer of the node
-void ht_get(char *name, element_h **getElement) {
+element_h *ht_get(char *name) {
 
 	unsigned long index = 0;
 	element_h *curr=NULL;
@@ -168,7 +168,7 @@ void ht_get(char *name, element_h **getElement) {
 			curr = curr->next;
 	}
 
-	*getElement = curr;
+	return curr;
 }
 
 
