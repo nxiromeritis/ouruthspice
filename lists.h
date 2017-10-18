@@ -4,6 +4,8 @@
 #include "hashtable.h"
 
 
+typedef enum component_type {undefined, R, L, C, V, I, D, M, Q} c_type;
+
 typedef struct RLCS_list_element {
 	c_type type;
 	char *name;

@@ -7,12 +7,12 @@
 #include "lists.h"
 #include "hashtable.h"
 #include "cir_parser.h"
+#include "mna.h"
 
 int main(int argc, char *argv[]) {
 
 	char filename[LINE_MAX];
 	unsigned long components_num;
-	int ht_put_ret;
 
 	if (argc != 2) {
 		printf("Error. Invalid number of arguments..\n");
@@ -44,6 +44,10 @@ int main(int argc, char *argv[]) {
 	print_list1();
 	print_list2();
 	print_sec_list();
+
+	init_MNA_system();
+	fill_MNA_system();
+	free_MNA_system();
 
 	freeHashTable();
 	free_lists();

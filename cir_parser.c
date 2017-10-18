@@ -195,8 +195,18 @@ void parse_cir(char *filename) {
 		min_tok_count = 0;
 		tok_count = 0;
 
+
+		// bypass possible non ascii characters (for some reason they exist in a benchmark)
 		line_offset = 0;
 		while ((line[line_offset] < 0) || (line[line_offset] > 127)) { line_offset++; }
+
+
+		// check if the first line character is '.'
+		// this indicates a possible spice command which will be ignored
+		if (line[line_offset] == '.') {
+			continue;
+		}
+
 
 		token = strtok(&line[line_offset], delim);
 

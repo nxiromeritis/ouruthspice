@@ -4,12 +4,8 @@
 #define LINE_MAX 128
 
 
-typedef enum component_type {undefined, R, L, C, V, I, D, M, Q} c_type;
 
-/*#define COLORS_OFF*/
-
-
-#ifndef COLORS_OFF
+#ifdef COLORS_ON
 #define NRM  "\x1B[0m"
 #define RED  "\x1B[31m"
 #define GRN  "\x1B[32m"
