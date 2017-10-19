@@ -159,16 +159,21 @@ void parse_cir(char *filename) {
 	// read the file line-by-line
 	while((getline(&line, &len, fp)) != -1) {
 
+		// bypass possible non ascii characters (for some reason they exist in a benchmark)
+		line_offset = 0;
+		while ((line[line_offset] < 0) || (line[line_offset] > 127)) { line_offset++; }
+
+
 		// bypass comments lines or lines containing only whitespaces
-		if (whitespaces_only(line))
+		if (whitespaces_only(&line[line_offset]))
 			continue;
 
-		if ((line[0] == '%') || (line[0] == '*'))
+		if ((line[line_offset] == '%') || (line[line_offset] == '*'))
 			continue;
 
 
 		/*#ifdef DEBUG*/
-		printf(GRN "<line read> %s" NRM, line);
+		printf(GRN "<line read> %s" NRM, &line[line_offset]);
 		/*#endif*/
 
 
@@ -196,9 +201,6 @@ void parse_cir(char *filename) {
 		tok_count = 0;
 
 
-		// bypass possible non ascii characters (for some reason they exist in a benchmark)
-		line_offset = 0;
-		while ((line[line_offset] < 0) || (line[line_offset] > 127)) { line_offset++; }
 
 
 		// check if the first line character is '.'
@@ -565,7 +567,7 @@ void parse_cir(char *filename) {
 
 				break;
 			default :
-				printf("Unknown type\n");
+				printf("Unknown type (%c)\n", toupper(type));
 				exit(EXIT_FAILURE);
 		}
 

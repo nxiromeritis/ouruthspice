@@ -36,7 +36,7 @@ void free_lists(){
 	free(team2_list.list);
 	team2_list.size = 0;
 
-	for(i=0; i < team2_list.size; i++) {
+	for(i=0; i < sec_list.size; i++) {
 		free(sec_list.list[i].name);
 		free(sec_list.list[i].model_name);
 	}
@@ -117,7 +117,7 @@ int insert_diode(char *name, element_h *node_plus, element_h *node_minus, char *
 	// nodes
 	sec_list.list[sec_list.size].character.diode.node_plus = node_plus;
 	sec_list.list[sec_list.size].character.diode.node_minus = node_minus;
-	
+
 	sec_list.list[sec_list.size].model_name = strdup(model_name);
 	if (sec_list.list[sec_list.size].model_name == NULL)
 		return -1;
