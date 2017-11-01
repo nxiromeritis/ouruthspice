@@ -9,6 +9,7 @@
 #include "cir_parser.h"
 #include "mna.h"
 
+
 int main(int argc, char *argv[]) {
 
 	char filename[LINE_MAX];
@@ -49,10 +50,15 @@ int main(int argc, char *argv[]) {
 	init_MNA_system();
 	fill_MNA_system();
 	print_MNA_system();
+	// TODO: solve 'operating point MNA' and dump results
+
+	// TODO: execute commands
+	print_command_list();
 
 	free_MNA_system();
 	freeHashTable();
 	free_lists();
+	free_command_list();
 
 	return 0;
 }

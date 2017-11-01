@@ -60,6 +60,14 @@ extern list_head team1_list;
 extern list_head team2_list;
 extern sec_list_head sec_list;
 
+extern char **command_list;
+extern unsigned int command_list_len;
+
+
+extern void add_command_to_list(char *command);
+extern void free_command_list();
+extern void print_command_list();
+
 extern void init_lists();
 extern void free_lists();
 

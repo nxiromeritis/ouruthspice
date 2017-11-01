@@ -10,6 +10,90 @@ list_head team1_list;
 list_head team2_list;
 sec_list_head sec_list;
 
+
+// and array of strings that represent
+// the commands that will be executed
+char **command_list = NULL;
+unsigned int command_list_len = 0;
+
+
+
+
+// adds the given command to the command list
+// NOTE1: Among many subsequent .DC commands, only the last is stored, no point solving the previous MNAs
+// NOTE2: Each .PRINT or .PLOT command is refering the previous DC command
+// NOTE3: Plot and print commands that have no DC command before them will be ignored DURING EXECUTION
+// NOTE4: DC commands that have not print or plot commands after them will be ignored DURING EXECUTION
+// NOTE5: Possible errors contained in command parameters will be unveiled during execution (interpreter logic)
+void add_command_to_list(char *command) {
+	static byte prev_command_is_dc = 0;
+	int strcmp_res;
+
+	/*printf("COMMAND: %s\n", command);*/
+
+	strcmp_res = strncmp(command, ".DC ", 4);
+
+	// if current command is .dc and the previous one is also dc..
+	if ( (strcmp_res == 0) && (prev_command_is_dc == 1) ) {
+
+		// the new dc command will overwrite the previous one
+		free(command_list[command_list_len-1]);
+	}
+	else { // allocate one more command entry in the list
+
+		command_list_len++;
+		command_list = (char **) realloc(command_list, command_list_len*sizeof(char *));
+		if (command_list == NULL) {
+			printf("Error. Memory allocation problems. Exiting..\n");
+			exit(EXIT_FAILURE);
+		}
+
+	}
+
+	// store the command
+	command_list[command_list_len-1] = strdup(command);
+	if (command_list[command_list_len-1] == NULL) {
+		printf("Error. Memory allocation problems. Exiting..\n");
+		exit(EXIT_FAILURE);
+	}
+
+	// update the .dc flag
+	/*prev_command_is_dc = !(strcmp_res); // correct but lacks readability*/
+	if (strcmp_res == 0)
+		prev_command_is_dc = 1;
+	else
+		prev_command_is_dc = 0;
+
+}
+
+
+// prints the command list
+void print_command_list() {
+	unsigned int i;
+
+	printf(BLU "\n*COMMAND LIST*\n" NRM);
+
+	for (i=0; i < command_list_len; i++)
+		printf("#%u: %s\n", i, command_list[i]);
+
+	printf(BLU "*END OF COMMAND LIST*\n\n" NRM);
+}
+
+
+
+// frees the command list
+void free_command_list() {
+	unsigned int i;
+
+	for (i=0; i < command_list_len; i++) {
+		free(command_list[i]);
+	}
+	free(command_list);
+}
+
+
+
+
 // Initialize the lists
 void init_lists(){
 	team1_list.size = 0;
@@ -20,7 +104,7 @@ void init_lists(){
 	sec_list.list = NULL;
 }
 
-// Free the lists and teir allocated fields
+// Free the lists and their allocated fields
 void free_lists(){
 	unsigned long i;
 
@@ -161,6 +245,8 @@ int insert_mos(char *name, element_h *node_d, element_h *node_g, element_h *node
 
 // Print the elements of the team1_list
 void print_list1 (){
+	unsigned long i;
+
 	printf("\n" BLU
 	       "-----------------------------\n"
 	       "-- List of Team 1 Elements --\n"
@@ -170,7 +256,7 @@ void print_list1 (){
 	       "-----------------------------\n",
 	       team1_list.size);
 
-	for (unsigned long i = 0; i < team1_list.size; i++){
+	for (i = 0; i < team1_list.size; i++){
 		printf("------>Name: " CYN "%s\n" BLU
 			   "-----------------------------\n", team1_list.list[i].name);
 		switch(team1_list.list[i].type){
@@ -200,6 +286,8 @@ void print_list1 (){
 
 // Print the elements of the team2_list
 void print_list2 (){
+	unsigned long i;
+
 	printf("\n" BLU
 	       "-----------------------------\n"
 	       "-- List of Team 2 Elements --\n"
@@ -209,7 +297,7 @@ void print_list2 (){
 	       "-----------------------------\n",
 	       team2_list.size);
 
-	for (unsigned long i = 0; i < team2_list.size; i++){
+	for (i = 0; i < team2_list.size; i++){
 		printf("------>Name: " CYN "%s\n" BLU
 			   "-----------------------------\n", team2_list.list[i].name);
 		switch(team2_list.list[i].type){
@@ -245,6 +333,8 @@ void print_list2 (){
 
 // Print the elements of the sec_list
 void print_sec_list (){
+	unsigned long i;
+
 	printf("\n" BLU
 	       "-----------------------------\n"
 	       "-- List of Unused Elements --\n"
@@ -254,7 +344,7 @@ void print_sec_list (){
 	       "-----------------------------\n",
 	       sec_list.size);
 
-	for (unsigned long i = 0; i < sec_list.size; i++){
+	for (i = 0; i < sec_list.size; i++){
 		printf("------>Name: " CYN "%s\n" BLU
 			   "-----------------------------\n", sec_list.list[i].name);
 		switch(sec_list.list[i].type){

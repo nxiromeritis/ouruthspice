@@ -2,15 +2,15 @@ CC = gcc
 CFLAGS = -g -Wall
 OBJ = spicy.o cir_parser.o hashtable.o lists.o mna.o
 EXECUTABLE = spicy
-DFLAGS = 
+DFLAGS = -DCOLORS_ON
 
 
 all: $(OBJ)
 	$(CC) $(OBJ) -o $(EXECUTABLE)
 
 
-colors: DFLAGS = -DCOLORS_ON
-colors: $(OBJ)
+colors_off: DFLAGS = 
+colors_off: $(OBJ)
 	@echo "\nBuild with colored output.."
 	$(CC) $(OBJ) -o $(EXECUTABLE)
 

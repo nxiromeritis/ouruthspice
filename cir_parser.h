@@ -3,5 +3,6 @@
 
 extern unsigned long get_components_num(char *filename);
 extern void parse_cir(char *filename);
+extern void parse_command(char *command);
 
 #endif

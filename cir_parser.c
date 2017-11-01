@@ -10,6 +10,15 @@
 #include "lists.h"
 
 
+// converts a string to uppercase string
+void strtoupper(char *str) {
+	int i;
+
+	for (i=0; i < (int)strlen(str); i++) {
+		str[i] = toupper(str[i]);
+	}
+}
+
 
 // returns 1 if character c exists in components string
 byte component_type_is_valid(char c) {
@@ -19,6 +28,36 @@ byte component_type_is_valid(char c) {
 		return 1;
 }
 
+
+// parses the command and stores it into the command list
+// Unknown commands are bypassed. Prints a Warning message in that case
+void parse_command(char *command) {
+	char *str_ptr;
+
+	strtoupper(command);
+
+	// each one of those commands are supposed to have arguments
+	if ( (strncmp(command, ".DC ", 4) == 0) || \
+		 (strncmp(command, ".OPTIONS ", 9) == 0) || \
+		 (strncmp(command, ".PRINT ", 7) == 0) || \
+		 (strncmp(command, ".PLOT ", 6) == 0) ) {
+
+		// erase possible \n at the end of the command (probably not necessary)
+		str_ptr = strchr(command, '\n');
+		if (str_ptr != NULL)
+			*str_ptr = '\0';
+
+		// adds the command to list
+		// Additional checks for the commands will be performed during command execution
+		add_command_to_list(command);
+
+	}
+	else {
+		printf(YEL "Warning" NRM ": Unknown command "
+			  "or command with no arguments. Ignoring %s\n", command);
+	}
+
+}
 
 
 // return 1 if str can be converted to a double, otherwise 0
@@ -164,10 +203,11 @@ void parse_cir(char *filename) {
 		while ((line[line_offset] < 0) || (line[line_offset] > 127)) { line_offset++; }
 
 
-		// bypass comments lines or lines containing only whitespaces
+		// bypass lines containing only whitespaces
 		if (whitespaces_only(&line[line_offset]))
 			continue;
 
+		// bypass comment lines
 		if ((line[line_offset] == '%') || (line[line_offset] == '*'))
 			continue;
 
@@ -177,11 +217,12 @@ void parse_cir(char *filename) {
 		/*#endif*/
 
 
+
 		/* ************** *
 		 * PARSE THE LINE *
 		 * ************** */
 
-		/* reinitialise variables and parse line */
+		/* re-initialise variables and parse line */
 		has_G2 = 0;
 		type = 'X';
 		name = NULL;
@@ -204,11 +245,14 @@ void parse_cir(char *filename) {
 
 
 		// check if the first line character is '.'
-		// this indicates a possible spice command which will be ignored
 		if (line[line_offset] == '.') {
-			continue;
+			parse_command(&line[line_offset]);
+			continue; // nothing more for this line
 		}
 
+
+
+		// not a command. parse the component information
 
 		token = strtok(&line[line_offset], delim);
 
@@ -571,9 +615,8 @@ void parse_cir(char *filename) {
 				exit(EXIT_FAILURE);
 		}
 
-		// TODO These are temporary. Actual pointers will be passed to
-		// data structure insert functions and the free will be performed by the
-		// another data structure function
+
+		// free varialbes as space is being allocated iteratively for each line
 		free(name);
 		free(node1_name);
 		free(node2_name);
