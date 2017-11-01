@@ -13,6 +13,7 @@ typedef struct RLCS_list_element {
 	element_h *node_plus;	// node +
 	element_h *node_minus;	// node -
 
+	double op_point_val;
 	double value;
 }list_element;
 

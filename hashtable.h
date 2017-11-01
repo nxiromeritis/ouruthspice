@@ -7,6 +7,8 @@ typedef struct element_h{
 	unsigned long id;
 	// TODO: add lists of pointers to elements
 	// according to the connection type
+
+	double val;
 	struct element_h *next;
 
 }element_h;

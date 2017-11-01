@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include "cir_parser.h"
 #include "hashtable.h"
 #include "spicy.h"
 
@@ -120,6 +121,7 @@ element_h *ht_put(char *name, unsigned long id) {
 	element_h *prev= NULL;
 	unsigned long index = 0;
 
+	strtoupper(name);
 	index = hs_function(HashTable->size, name);
 
 
@@ -161,6 +163,7 @@ element_h *ht_get(char *name) {
 	unsigned long index = 0;
 	element_h *curr=NULL;
 
+	strtoupper(name);
 	index = hs_function(HashTable->size,name);
 
 	curr = HashTable->table[index];

@@ -1,7 +1,7 @@
 #ifndef _SPICY_H_
 #define _SPICY_H_
 
-#define LINE_MAX 128
+#define BUF_MAX 128
 
 
 

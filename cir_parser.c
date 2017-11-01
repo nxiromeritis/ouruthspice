@@ -39,6 +39,9 @@ void parse_command(char *command) {
 	// each one of those commands are supposed to have arguments
 	if ( (strncmp(command, ".DC ", 4) == 0) || \
 		 (strncmp(command, ".OPTIONS ", 9) == 0) || \
+		 (strcmp(command, ".OPTIONS\n") == 0) || \
+		 (strcmp(command, ".OPTIONS\t") == 0) || \
+		 (strcmp(command, ".OPTIONS") == 0) || \
 		 (strncmp(command, ".PRINT ", 7) == 0) || \
 		 (strncmp(command, ".PLOT ", 6) == 0) ) {
 

@@ -4,15 +4,16 @@ OBJ = spicy.o cir_parser.o hashtable.o lists.o mna.o
 EXECUTABLE = spicy
 DFLAGS = -DCOLORS_ON
 
+CLINK = -lgsl -lgslcblas
 
 all: $(OBJ)
-	$(CC) $(OBJ) -o $(EXECUTABLE)
+	$(CC) $(OBJ) -o $(EXECUTABLE) $(CLINK)
 
 
 colors_off: DFLAGS = 
 colors_off: $(OBJ)
 	@echo "\nBuild with colored output.."
-	$(CC) $(OBJ) -o $(EXECUTABLE)
+	$(CC) $(OBJ) -o $(EXECUTABLE) $(CLINK)
 
 %.o: %.c %.h
 	$(CC) $(CFLAGS) $(DFLAGS) -c $< -o $@

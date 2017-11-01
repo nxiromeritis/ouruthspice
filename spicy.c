@@ -2,6 +2,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <gsl/gsl_linalg.h>
+#include <gsl/gsl_errno.h>
 
 #include "spicy.h"
 #include "lists.h"
@@ -11,8 +13,8 @@
 
 
 int main(int argc, char *argv[]) {
-
-	char filename[LINE_MAX];
+	char gnd_name[2] = "0";
+	char filename[BUF_MAX];
 	unsigned long components_num;
 
 	if (argc != 2) {
@@ -21,7 +23,7 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	if (strlen(argv[1]) > LINE_MAX-1) {
+	if (strlen(argv[1]) > BUF_MAX-1) {
 		printf("Error. Filename too long. Exiting..\n");
 		return 1;
 	}
@@ -33,7 +35,7 @@ int main(int argc, char *argv[]) {
 	ht_init(components_num >> 1);
 
 	// add grounding into the hash table (we want it to be reserved)
-	ht_put("0", 0);
+	ht_put(gnd_name, 0);
 
 	init_lists();
 
@@ -50,11 +52,32 @@ int main(int argc, char *argv[]) {
 	init_MNA_system();
 	fill_MNA_system();
 	print_MNA_system();
-	// TODO: solve 'operating point MNA' and dump results
+
+	if (solver_type == LU_SOLVER)
+		decomp_lu_MNA();
+	else
+		decomp_cholesky_MNA();
+
 
 	// TODO: execute commands
 	print_command_list();
+	execute_commands();
 
+
+	// TODO: solve 'operating point MNA' and dump results
+	if (solver_type == LU_SOLVER) {
+		solve_lu_MNA();
+		dump_MNA_nodes();
+	}
+	else {	// cholesky
+		solve_cholesky_MNA();
+		dump_MNA_nodes();
+	}
+
+
+	if (solver_type == LU_SOLVER) {
+		gsl_permutation_free(gsl_p);
+	}
 	free_MNA_system();
 	freeHashTable();
 	free_lists();

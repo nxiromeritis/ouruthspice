@@ -2,8 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "cir_parser.h"
 #include "spicy.h"
 #include "lists.h"
+#include "mna.h"
 
 
 list_head team1_list;
@@ -29,7 +31,34 @@ void add_command_to_list(char *command) {
 	static byte prev_command_is_dc = 0;
 	int strcmp_res;
 
+	char *token = NULL;
+	const char delim[5] = " \r\t\n";
+	unsigned int tok_count = 0;
+
 	/*printf("COMMAND: %s\n", command);*/
+
+
+	// if the parsed command is .OPTIONS execute the command during parsing
+	strcmp_res = strncmp(command, ".OPTIONS", 8);
+	if (strcmp_res == 0) {
+
+		// bypass command name
+		token = strtok(command, delim);
+
+		token = strtok(NULL, delim);
+		while (token != NULL) {
+			tok_count++;
+
+			if (strcmp(token, "SPD") == 0) {
+				solver_type = CHOL_SOLVER;
+			}
+			// else bypass argument (future arguments: ITER SPARSE)
+
+			token = strtok(NULL, delim);
+		}
+		return;
+	}
+
 
 	strcmp_res = strncmp(command, ".DC ", 4);
 
@@ -142,11 +171,13 @@ int insert_element(list_head *list, c_type type, char *name, element_h *node_plu
 	list->list[list->size].name = strdup(name);
 	if (list->list[list->size].name == NULL)
 		return -1;
+	strtoupper(list->list[list->size].name);
 
 	// nodes
 	list->list[list->size].node_plus = node_plus;
 	list->list[list->size].node_minus = node_minus;
 
+	list->list[list->size].op_point_val = value;
 	list->list[list->size].value = value;
 
 	list->size++;
@@ -168,6 +199,7 @@ int insert_bjt(char *name, element_h *node_c, element_h *node_b, element_h *node
 	sec_list.list[sec_list.size].name = strdup(name);
 	if (sec_list.list[sec_list.size].name == NULL)
 		return -1;
+	strtoupper(sec_list.list[sec_list.size].name);
 
 	// nodes
 	sec_list.list[sec_list.size].character.bjt.node_c = node_c;
@@ -197,6 +229,7 @@ int insert_diode(char *name, element_h *node_plus, element_h *node_minus, char *
 	sec_list.list[sec_list.size].name = strdup(name);
 	if (sec_list.list[sec_list.size].name == NULL)
 		return -1;
+	strtoupper(sec_list.list[sec_list.size].name);
 
 	// nodes
 	sec_list.list[sec_list.size].character.diode.node_plus = node_plus;
@@ -225,6 +258,7 @@ int insert_mos(char *name, element_h *node_d, element_h *node_g, element_h *node
 	sec_list.list[sec_list.size].name = strdup(name);
 	if (sec_list.list[sec_list.size].name == NULL)
 		return -1;
+	strtoupper(sec_list.list[sec_list.size].name);
 
 	// nodes
 	sec_list.list[sec_list.size].character.mos.node_d = node_d;
