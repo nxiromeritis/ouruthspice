@@ -80,6 +80,8 @@ void add_command_to_list(char *command) {
 	}
 
 	// store the command
+
+	printf("\t\t\t\t\tcommand : %s\n",command);
 	command_list[command_list_len-1] = strdup(command);
 	if (command_list[command_list_len-1] == NULL) {
 		printf("Error. Memory allocation problems. Exiting..\n");

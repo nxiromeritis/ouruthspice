@@ -44,9 +44,9 @@ int main(int argc, char *argv[]) {
 
 	printHastable();
 	print_id_list();
-	print_list1();
-	print_list2();
-	print_sec_list();
+	//print_list1();
+	//print_list2();
+	//print_sec_list();
 
 
 	init_MNA_system();
@@ -73,7 +73,6 @@ int main(int argc, char *argv[]) {
 		solve_cholesky_MNA();
 		dump_MNA_nodes();
 	}
-
 
 	if (solver_type == LU_SOLVER) {
 		gsl_permutation_free(gsl_p);

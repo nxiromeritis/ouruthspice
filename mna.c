@@ -84,12 +84,13 @@ void solve_cholesky_MNA() {
 
 // executes the command_list (command .OPTIONS is excluded from the list as it is executed during the parsing phase)
 void execute_commands() {
-	unsigned long i;
+	unsigned long i,k;
 	const char delim[5] = " \r\t\n";
 	char *token = NULL;
 
 	// variables used for DC command
-	FILE *node_fp;
+	FILE *fp_draw = NULL;
+	FILE *node_fp = NULL;
 	char *var_name = NULL;
 	char *node_name = NULL;
 	char *filename = NULL;
@@ -104,12 +105,22 @@ void execute_commands() {
 	list_element *var = NULL;
 
 	// TODO -> do with malloc
-	char tmp_name[128];
+	//char tmp_name[128];
 
 
 
 	for (i = 0; i < command_list_len; i++) {
 		if (strncmp(command_list[i], ".DC ", 4) == 0) {
+
+			if( var_name != NULL){
+
+				start = 0;
+				end = 0;
+				jump = 0;
+				free(var_name);
+				var_name = NULL;
+			}
+
 
 			// Command name
 			token = strtok(command_list[i], delim);
@@ -128,26 +139,33 @@ void execute_commands() {
 			}
 			// before storing var name check if it exist inside the list
 			var_found = 0;
-			for (i=0; i < team1_list.size; i++) {
 
-				// token + 1 becase we bypass the first character that refers to the component type
-				if (strcmp(token+1, team1_list.list[i].name) == 0) {
-					var_found = 1;
-					var = &team1_list.list[i];
-					idx1 = var->node_plus->id - 1;
-					idx2 = var->node_minus->id -1;
-					break;
+
+			if( toupper(token[0]) == 'I'){
+				for (k=0; k < team1_list.size; k++) {
+
+					// token + 1 becase we bypass the first character that refers to the component type
+					if ((strcmp(token+1, team1_list.list[k].name) == 0 ) && (team1_list.list[k].type == 'I')) {
+						var_found = 1;
+						var = &team1_list.list[k];
+						idx1 = var->node_plus->id - 1;
+						idx2 = var->node_minus->id -1;
+						break;
+					}
 				}
 			}
+
 			if (var_found == 0) {
 
-				for (i=0; i < team2_list.size; i++) {
+				if(toupper(token[0]) == 'V'){
 
-					if (strcmp(token+1, team2_list.list[i].name) == 0) {
-						var_found = 2;
-						var = &team2_list.list[i];
-						idx1 = i + total_ids - 1;
-						break;
+					for (k=0; k < team2_list.size; k++) {
+						if ((strcmp(token+1, team2_list.list[k].name) == 0 ) && (team2_list.list[k].type == 'V')) {
+							var_found = 2;
+							var = &team2_list.list[k];
+							idx1 = k + total_ids - 1;
+							break;
+						}
 					}
 				}
 			}
@@ -156,7 +174,7 @@ void execute_commands() {
 				printf(RED "Error" NRM ": .DC variable not found\n Bypassing..\n");
 				continue;
 			}
-			var_name = strdup(token+1);
+			var_name = strdup(token);
 			if (var_name == NULL) {
 				printf("Error. Memory allocation problems. Exiting..\n");
 				exit(EXIT_FAILURE);
@@ -233,6 +251,10 @@ void execute_commands() {
 			// TODO: multiple nodes in one line of .print or .plot command
 			// Make the parser execute the options command and create a list of dc-print commands
 
+			if(var_found == 0 ){
+				continue;
+			}
+
 			// bypass command name
 			token = strtok(command_list[i], delim);
 			if (token == NULL) {
@@ -274,6 +296,14 @@ void execute_commands() {
 				continue;
 			}
 
+			/***********/
+			node_name = realloc(node_name,(strlen(token)+1)*sizeof(char));
+			if (node_name == NULL) {
+				printf("Error. Memory allocation problems. Exiting..\n");
+				exit(EXIT_FAILURE);
+			}
+			snprintf(node_name, strlen(token)+1, "%s", &token[0]);
+			/*********/
 
 			// there should be no more arguments
 			token = strtok(NULL, delim);
@@ -301,13 +331,32 @@ void execute_commands() {
 				exit(EXIT_FAILURE);
 			}
 
+
+			/*  Script for plots */
+
+			fp_draw = fopen("draw.sh", "a");
+
+			if (fp_draw == NULL) {
+				perror("fopen");
+				exit(EXIT_FAILURE);
+			}
+
+			/***************/
+
 			if (var_found == 1) {
 
+
 				for (j=start; j < end + 0.000000001; j = j + jump) {
-					mna_vector[idx1] += var->value;	// eliminate old value from b vector
-					mna_vector[idx1] -= j;			// add new value to b vector
-					mna_vector[idx2] -= var->value;	// eliminate old value from b vector
-					mna_vector[idx2] += j;			// add new value to b vector
+
+					if( (idx1+1) != 0 ){
+						mna_vector[idx1] += var->value;	// eliminate old value from b vector
+						mna_vector[idx1] -= j;			// add new value to b vector
+					}
+					if( (idx2+1) != 0 ){
+						mna_vector[idx2] -= var->value;	// eliminate old value from b vector
+						mna_vector[idx2] += j;			// add new value to b vector
+					}
+
 					var->value = j;
 					if (solver_type == LU_SOLVER) {
 						solve_lu_MNA();
@@ -317,7 +366,20 @@ void execute_commands() {
 						solve_cholesky_MNA();
 						fprintf(node_fp, "%lf\t\t%lf\n", j, node->val);
 					}
+
 				}
+
+
+				if( (idx1+1) != 0 ){
+					mna_vector[idx1] += var->value;	// eliminate old value from b vector
+					mna_vector[idx1] -= var->op_point_val;			// add new value to b vector
+				}
+				if( (idx2+1) != 0 ){
+					mna_vector[idx2] -= var->value;	// eliminate old value from b vector
+					mna_vector[idx2] += var->op_point_val;			// add new value to b vector
+				}
+				var->value = var->op_point_val;
+
 			}
 			else {  // it is guaranteed that var_found == 2
 				for (j=start; j < end + 0.00000001; j = j + jump) {
@@ -335,28 +397,38 @@ void execute_commands() {
 						fprintf(node_fp, "%lf\t\t%lf\n", j, node->val);
 					}
 				}
+
+				mna_vector[idx1] = var->op_point_val;
+				var->value = var->op_point_val;
 			}
 
+			fprintf(fp_draw, "gnuplot -e \"set terminal png size 500,500;");
+			fprintf(fp_draw, "set output \\\"%s_DC_%s.png\\\";",node_name,var_name);
+			fprintf(fp_draw, "plot \\\"%s\\\" using 1:2 with linespoints;\"\n", filename);
+			fprintf(fp_draw, "xdg-open \"%s_DC_%s.png\"\n",node_name,var_name);
 
-			// recover operating point value
-			var->value = var->op_point_val;
 
-			sprintf(tmp_name, "gnuplot -e \"plot \\\"%s\\\" using 1:2 with linespoints; pause -1\"\n", filename);
-			system(tmp_name);
-
-			j = 0;
-			start = 0;
-			end = 0;
-			jump = 0;
 			fclose(node_fp);
-			free(var_name);
+			fclose(fp_draw);
 			free(node_name);
 			free(filename);
-			var_name = NULL;
 			node_name = NULL;
 			filename = NULL;
 		}
+
 	}
+
+	system("bash draw.sh");
+
+	if(var_name != NULL){
+
+		start = 0;
+		end = 0;
+		jump = 0;
+		free(var_name);
+		var_name = NULL;
+	}
+
 }
 
 

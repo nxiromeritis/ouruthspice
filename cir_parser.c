@@ -29,6 +29,32 @@ byte component_type_is_valid(char c) {
 }
 
 
+void parse_plot(char *command){					/* .PLOT V(1) V(2) -> .PLOT V(1) / .PLOT V(2)  */
+
+	const char delim[5] = " \r\t\n";
+	char *token = NULL;
+	char *plot_command = NULL;
+	unsigned int size_cmd;
+
+	token = strtok(command, delim);       // First token is the command .PLOT/.PRINT
+	plot_command = strdup(token);
+	size_cmd = strlen(token);
+
+	token = strtok(NULL,delim);           // Parse each node for the current command
+	while ( token!= NULL){
+
+		plot_command = (char *)realloc(plot_command,( size_cmd + strlen(token) + 3)*sizeof(char));
+
+		sprintf(&plot_command[size_cmd]," %s%c",token,'\0');
+		add_command_to_list(plot_command);
+
+		token = strtok(NULL,delim);
+	}
+
+	free(plot_command);
+	plot_command = NULL;
+}
+
 // parses the command and stores it into the command list
 // Unknown commands are bypassed. Prints a Warning message in that case
 void parse_command(char *command) {
@@ -52,7 +78,15 @@ void parse_command(char *command) {
 
 		// adds the command to list
 		// Additional checks for the commands will be performed during command execution
-		add_command_to_list(command);
+
+		if((strncmp(command, ".PRINT ", 7) == 0) || \
+		 (strncmp(command, ".PLOT ", 6) == 0)){
+
+		 	parse_plot(command);
+
+		}else{
+			add_command_to_list(command);
+		}
 
 	}
 	else {

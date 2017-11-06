@@ -21,5 +21,7 @@ colors_off: $(OBJ)
 
 .PHONY: clean
 
-clean:
+clean1:
 	rm -rvf *.o $(EXECUTABLE) test lists
+clean2:
+	rm -rvf *.txt *.png draw.sh

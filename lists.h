@@ -4,7 +4,9 @@
 #include "hashtable.h"
 
 
-typedef enum component_type {undefined, R, L, C, V, I, D, M, Q} c_type;
+//typedef enum component_type {undefined, R, L, C, V, I, D, M, Q} c_type;
+typedef enum component_type {undefined = 0 , R ='R' , L ='L', C ='C', V ='V', I ='I' , D ='D',M ='M', Q ='Q'} c_type;
+
 
 typedef struct RLCS_list_element {
 	c_type type;
@@ -64,7 +66,7 @@ extern sec_list_head sec_list;
 extern char **command_list;
 extern unsigned int command_list_len;
 
-
+void parse_plot(char *command);
 extern void add_command_to_list(char *command);
 extern void free_command_list();
 extern void print_command_list();
