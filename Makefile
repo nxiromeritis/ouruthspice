@@ -19,9 +19,14 @@ colors_off: $(OBJ)
 	$(CC) $(CFLAGS) $(DFLAGS) -c $< -o $@
 
 
-.PHONY: clean
+.PHONY: clean clean1 clean2
+
+clean: 
+	rm -rvf *.o $(EXECUTABLE) test lists
+	rm -rvf *.txt *.png draw.sh
 
 clean1:
 	rm -rvf *.o $(EXECUTABLE) test lists
+
 clean2:
 	rm -rvf *.txt *.png draw.sh

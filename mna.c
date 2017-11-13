@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <gsl/gsl_linalg.h>
 #include <gsl/gsl_errno.h>
+#include <gsl/gsl_blas.h>
 
 #include "cir_parser.h"
 #include "spicy.h"
@@ -21,7 +22,7 @@ gsl_vector_view gsl_mna_vector;
 gsl_permutation *gsl_p = NULL;
 
 byte solver_type = LU_SOLVER;
-
+double itol = ITOL_DEFAULT;
 
 void decomp_lu_MNA() {
 	int s;
@@ -402,10 +403,12 @@ void execute_commands() {
 				var->value = var->op_point_val;
 			}
 
-			fprintf(fp_draw, "gnuplot -e \"set terminal png size 500,500;");
+			fprintf(fp_draw, "gnuplot -e \"set terminal png size 1024, 1024;");
 			fprintf(fp_draw, "set output \\\"%s_DC_%s.png\\\";",node_name,var_name);
 			fprintf(fp_draw, "plot \\\"%s\\\" using 1:2 with linespoints;\"\n", filename);
-			fprintf(fp_draw, "xdg-open \"%s_DC_%s.png\"\n",node_name,var_name);
+
+			// redirect sterr to stdout and redirect stdout to /dev/null to avoid viewing xdg-open warnings
+			fprintf(fp_draw, "xdg-open \"%s_DC_%s.png\" > /dev/null 2>&1\n",node_name,var_name);
 
 
 			fclose(node_fp);

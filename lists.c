@@ -50,7 +50,27 @@ void add_command_to_list(char *command) {
 			tok_count++;
 
 			if (strcmp(token, "SPD") == 0) {
-				solver_type = CHOL_SOLVER;
+
+				// we assume that the user knows what he does and he does not give
+				// the same option multiple times
+				if (solver_type == BI_CG_SOLVER)
+					solver_type = CG_SOLVER;
+				else if (solver_type  != CG_SOLVER)
+					solver_type = CHOL_SOLVER;
+
+			}
+			else if (strcmp(token, "ITER") == 0) {
+
+				// we assume that the user knows what he does and he does not give
+				// the same option multiple times
+				if (solver_type == CHOL_SOLVER)
+					solver_type = CG_SOLVER;
+				else if (solver_type != CG_SOLVER)
+					solver_type = BI_CG_SOLVER;
+			}
+			else if (strncmp(token, "ITOL", 4) == 0) {
+				// update itol
+				parse_double(&itol, &token[5]);
 			}
 			// else bypass argument (future arguments: ITER SPARSE)
 

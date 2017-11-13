@@ -8,8 +8,14 @@ extern double *mna_array;
 extern double *mna_vector;
 extern unsigned long mna_dimension_size;
 
-#define LU_SOLVER	0
-#define CHOL_SOLVER	1
+#define ITOL_DEFAULT	10e-6
+
+#define LU_SOLVER		0
+#define CHOL_SOLVER		1
+#define CG_SOLVER		2
+#define BI_CG_SOLVER	3
+
+extern double itol;
 
 extern byte solver_type;
 extern gsl_matrix_view gsl_mna_array;

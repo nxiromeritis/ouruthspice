@@ -48,23 +48,40 @@ int main(int argc, char *argv[]) {
 	//print_list2();
 	//print_sec_list();
 
+	// print the variables that were set by reading Options
+	printf("\nSOLVER: %s\n", ((solver_type==0)?"lu_decomp":
+						   ((solver_type == 1)?"cholesky_decomp":
+						   ((solver_type == 2)?"cg_solver":
+						   ((solver_type == 3)?"bi_cg_solver":"unknown_solver")))));
+	printf("ITOL: %e\n", itol);
 
 	init_MNA_system();
 	fill_MNA_system();
 	print_MNA_system();
 
-	if (solver_type == LU_SOLVER)
-		decomp_lu_MNA();
-	else
-		decomp_cholesky_MNA();
+	switch(solver_type) {
+		case LU_SOLVER:
+			decomp_lu_MNA();
+			break;
+		case CHOL_SOLVER:
+			decomp_cholesky_MNA();
+			break;
+		// iterative solving method. No need to decompose
+		case CG_SOLVER:
+		case BI_CG_SOLVER:
+			break;
+		default:
+			printf(RED "Error uknown solver type specified..\n" NRM);
+			exit(EXIT_FAILURE);
+	}
 
 
-	// TODO: execute commands
+
 	print_command_list();
 	execute_commands();
 
 
-	// TODO: solve 'operating point MNA' and dump results
+	// TODO: Write another switch case and call possible iterative functions
 	if (solver_type == LU_SOLVER) {
 		solve_lu_MNA();
 		dump_MNA_nodes();
@@ -73,6 +90,7 @@ int main(int argc, char *argv[]) {
 		solve_cholesky_MNA();
 		dump_MNA_nodes();
 	}
+
 
 	if (solver_type == LU_SOLVER) {
 		gsl_permutation_free(gsl_p);
