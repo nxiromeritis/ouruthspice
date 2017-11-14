@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -g -Wall
+CFLAGS = -g -Wall 
 OBJ = spicy.o cir_parser.o hashtable.o lists.o mna.o
 EXECUTABLE = spicy
 DFLAGS = -DCOLORS_ON

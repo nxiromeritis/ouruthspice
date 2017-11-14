@@ -69,6 +69,7 @@ int main(int argc, char *argv[]) {
 		// iterative solving method. No need to decompose
 		case CG_SOLVER:
 		case BI_CG_SOLVER:
+			initialise_iter_methods();
 			break;
 		default:
 			printf(RED "Error uknown solver type specified..\n" NRM);
@@ -80,16 +81,21 @@ int main(int argc, char *argv[]) {
 	print_command_list();
 	execute_commands();
 
-
-	// TODO: Write another switch case and call possible iterative functions
-	if (solver_type == LU_SOLVER) {
-		solve_lu_MNA();
-		dump_MNA_nodes();
+	switch(solver_type) {
+		case LU_SOLVER:
+			solve_lu_MNA();
+			break;
+		case CHOL_SOLVER:
+			solve_cholesky_MNA();
+			break;
+		case CG_SOLVER:
+			solve_CG_iter_method();
+			break;
+		case BI_CG_SOLVER:
+		default:
+			break;
 	}
-	else {	// cholesky
-		solve_cholesky_MNA();
-		dump_MNA_nodes();
-	}
+	dump_MNA_nodes();
 
 
 	if (solver_type == LU_SOLVER) {
