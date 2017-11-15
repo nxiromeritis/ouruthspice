@@ -84,23 +84,29 @@ int main(int argc, char *argv[]) {
 	switch(solver_type) {
 		case LU_SOLVER:
 			solve_lu_MNA();
+			gsl_permutation_free(gsl_p);
+			gsl_vector_free(gsl_x_vector);
 			break;
 		case CHOL_SOLVER:
 			solve_cholesky_MNA();
+			gsl_vector_free(gsl_x_vector);
 			break;
 		case CG_SOLVER:
 			solve_CG_iter_method();
+			free_gsl_vectors();
 			break;
 		case BI_CG_SOLVER:
+			solve_BI_CG_iter_method();
+			free_gsl_vectors();
+			break;
 		default:
 			break;
 	}
+
+
 	dump_MNA_nodes();
 
 
-	if (solver_type == LU_SOLVER) {
-		gsl_permutation_free(gsl_p);
-	}
 	free_MNA_system();
 	freeHashTable();
 	free_lists();

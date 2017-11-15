@@ -15,20 +15,20 @@
 
 double *mna_array = NULL;
 double *mna_vector = NULL;
-double *M_array = NULL;
-double *x_vector = NULL;
-double *z_vector = NULL;
-double *r_vector = NULL;
 unsigned long mna_dimension_size = 0;
 
 gsl_matrix_view gsl_mna_array;
 gsl_vector_view gsl_mna_vector;
-gsl_vector_view gsl_M_array;
-gsl_vector_view gsl_x_vector;
-gsl_vector_view gsl_z_vector;
-gsl_vector_view gsl_r_vector;
-gsl_vector *ro_vector = NULL;
-gsl_vector *q_vector = NULL;
+gsl_vector *gsl_M_array = NULL;
+gsl_vector *gsl_x_vector = NULL;
+gsl_vector *gsl_z_vector = NULL;
+gsl_vector *gsl_r_vector = NULL;
+gsl_vector *gsl_p_vector = NULL;
+gsl_vector *gsl_q_vector = NULL;
+gsl_vector *gsl_zT_vector = NULL;
+gsl_vector *gsl_rT_vector = NULL;
+gsl_vector *gsl_pT_vector = NULL;
+gsl_vector *gsl_qT_vector = NULL;
 gsl_permutation *gsl_p = NULL;
 
 byte solver_type = LU_SOLVER;
@@ -36,6 +36,8 @@ double itol = ITOL_DEFAULT;
 
 void decomp_lu_MNA() {
 	int s;
+
+	gsl_x_vector = gsl_vector_alloc(mna_dimension_size);
 
 	gsl_mna_array = gsl_matrix_view_array(mna_array, mna_dimension_size, mna_dimension_size);
 	gsl_mna_vector = gsl_vector_view_array(mna_vector, mna_dimension_size);
@@ -47,6 +49,7 @@ void decomp_lu_MNA() {
 }
 
 void decomp_cholesky_MNA() {
+	gsl_x_vector = gsl_vector_alloc(mna_dimension_size);
 
 	gsl_mna_array = gsl_matrix_view_array(mna_array, mna_dimension_size, mna_dimension_size);
 	gsl_mna_vector = gsl_vector_view_array(mna_vector, mna_dimension_size);
@@ -58,86 +61,67 @@ void decomp_cholesky_MNA() {
 void initialise_iter_methods() {
 	unsigned long i;
 
+
 	gsl_mna_array = gsl_matrix_view_array(mna_array, mna_dimension_size, mna_dimension_size);
 	gsl_mna_vector = gsl_vector_view_array(mna_vector, mna_dimension_size);
 
-	M_array = (double *)calloc(mna_dimension_size, sizeof(double));
-	if (mna_array == NULL) {
-		printf("Error. Memory allocation problems. Exiting..\n");
-		exit(EXIT_FAILURE);
-	}
-	gsl_M_array = gsl_vector_view_array(M_array, mna_dimension_size);
-
-	r_vector = (double *)calloc(mna_dimension_size, sizeof(double));
-	if (mna_array == NULL) {
-		printf("Error. Memory allocation problems. Exiting..\n");
-		exit(EXIT_FAILURE);
-	}
-	gsl_r_vector = gsl_vector_view_array(r_vector, mna_dimension_size);
-
-	x_vector = (double *)calloc(mna_dimension_size, sizeof(double));
-	if (mna_array == NULL) {
-		printf("Error. Memory allocation problems. Exiting..\n");
-		exit(EXIT_FAILURE);
-	}
-	gsl_x_vector = gsl_vector_view_array(x_vector, mna_dimension_size);
-
+	gsl_M_array = gsl_vector_alloc(mna_dimension_size);
+	gsl_vector_set_all(gsl_M_array,1);
 
 	for (i = 0; i < mna_dimension_size; i++){
-		M_array[i] = mna_array[(i * mna_dimension_size) + i];
-		if (M_array[i] == 0.0)
-			M_array[i] = 1.0;
+
+		if(  mna_array[(i * mna_dimension_size) + i] != 0 )
+			gsl_vector_set(gsl_M_array,i,mna_array[(i * mna_dimension_size) + i]);
+
 	}
 
 
-	z_vector = (double *)calloc(mna_dimension_size, sizeof(double));
-	if (mna_array == NULL) {
-		printf("Error. Memory allocation problems. Exiting..\n");
-		exit(EXIT_FAILURE);
-	}
-	gsl_z_vector = gsl_vector_view_array(z_vector, mna_dimension_size);
-	
-	ro_vector = gsl_vector_calloc(mna_dimension_size);
-	q_vector = gsl_vector_calloc(mna_dimension_size);
 
+	gsl_x_vector = gsl_vector_calloc(mna_dimension_size);
+	gsl_z_vector = gsl_vector_calloc(mna_dimension_size);
+	gsl_r_vector = gsl_vector_calloc(mna_dimension_size);
+	gsl_p_vector = gsl_vector_calloc(mna_dimension_size);
+	gsl_q_vector = gsl_vector_calloc(mna_dimension_size);
+
+	if(solver_type == BI_CG_SOLVER){
+		gsl_zT_vector = gsl_vector_calloc(mna_dimension_size);
+		gsl_rT_vector = gsl_vector_calloc(mna_dimension_size);
+		gsl_pT_vector = gsl_vector_calloc(mna_dimension_size);
+		gsl_qT_vector = gsl_vector_calloc(mna_dimension_size);
+	}
 }
 
 
 // dont forget to free the permutation after the last call of this function
 void solve_lu_MNA() {
 	unsigned long i;
-	gsl_vector *gsl_x = NULL;
 
-	gsl_x = gsl_vector_alloc(mna_dimension_size);
-
-	gsl_linalg_LU_solve(&gsl_mna_array.matrix, gsl_p, &gsl_mna_vector.vector, gsl_x);
+	gsl_linalg_LU_solve(&gsl_mna_array.matrix, gsl_p, &gsl_mna_vector.vector, gsl_x_vector);
 
 	// id_to_nodes has the GND located at idx 0
 	// although MNA array and vector ignore GND and the first node starts from 0
 	for (i=1; i < total_ids; i++) {
-		id_to_node[i]->val = gsl_vector_get(gsl_x, i-1);
+		id_to_node[i]->val = gsl_vector_get(gsl_x_vector, i-1);
 	}
 
-	gsl_vector_free(gsl_x);
+
 }
 
 
 void solve_cholesky_MNA() {
 	unsigned long i;
-	gsl_vector *gsl_x = NULL;
 
-	gsl_x = gsl_vector_alloc(mna_dimension_size);
-
-	gsl_linalg_cholesky_solve(&gsl_mna_array.matrix, &gsl_mna_vector.vector, gsl_x);
+	gsl_linalg_cholesky_solve(&gsl_mna_array.matrix, &gsl_mna_vector.vector, gsl_x_vector);
 
 	// id_to_nodes has the GND located at idx 0
 	// although MNA array and vector ignore GND and the first node starts from 0
 	for (i=1; i < total_ids; i++) {
-		id_to_node[i]->val = gsl_vector_get(gsl_x, i-1);
+		id_to_node[i]->val = gsl_vector_get(gsl_x_vector, i-1);
 	}
 
-	gsl_vector_free(gsl_x);
 }
+
+
 
 void solve_CG_iter_method() {
 	unsigned long i;
@@ -146,58 +130,146 @@ void solve_CG_iter_method() {
 	double alpha = 0.0, beta = 0.0, tmp = 0.0;
 	double rho = 0.0, rho1 = 0.0;
 
-	gsl_vector_scale(&gsl_x_vector.vector, 0.0);
-	gsl_vector_scale(&gsl_r_vector.vector, 0.0);
-	//r = b - Ax
-	gsl_vector_memcpy(&gsl_r_vector.vector, &gsl_mna_vector.vector);
-	gsl_blas_dgemv(CblasNoTrans, -1.0, &gsl_mna_array.matrix, &gsl_x_vector.vector, 1.0, &gsl_r_vector.vector);
+	gsl_vector_set_zero(gsl_x_vector);
+
+	//r = b
+	gsl_vector_memcpy(gsl_r_vector, &gsl_mna_vector.vector);
+	//r = r - Ax
+	gsl_blas_dgemv(CblasNoTrans, -1.0, &gsl_mna_array.matrix, gsl_x_vector, 1.0, gsl_r_vector);
 
 	for (iter = 0; iter < MAX_ITERATIONS; iter++) {
-		normR = gsl_blas_dnrm2(&gsl_r_vector.vector);
+		normR = gsl_blas_dnrm2(gsl_r_vector);
 		normB = gsl_blas_dnrm2(&gsl_mna_vector.vector);
 		if (normB == 0.0)
 			normB = 1.0;
-		
+
 		if ((normR / normB) <= itol)
 			break;
 
 		solve_precond();
 
-		gsl_blas_ddot(&gsl_r_vector.vector, &gsl_z_vector.vector, &rho);
+		gsl_blas_ddot(gsl_r_vector, gsl_z_vector, &rho);
 
 		if (iter == 0) {
-			gsl_vector_memcpy(ro_vector, &gsl_z_vector.vector);
+			gsl_vector_memcpy(gsl_p_vector, gsl_z_vector);
 		}else {
 			beta = rho / rho1;
-			gsl_vector_scale(ro_vector, beta);
-			gsl_vector_add(ro_vector, &gsl_z_vector.vector);
+			gsl_vector_scale(gsl_p_vector, beta);
+			gsl_vector_add(gsl_p_vector, gsl_z_vector);
 		}
 
 		rho1 = rho;
 
 		solve_q();
 
-		gsl_blas_ddot(ro_vector, q_vector, &tmp);
+		gsl_blas_ddot(gsl_p_vector, gsl_q_vector, &tmp);
 		alpha = rho / tmp;
 
-		gsl_blas_daxpy(alpha, ro_vector, &gsl_x_vector.vector);
-		gsl_blas_daxpy((0.0 - alpha), q_vector, &gsl_r_vector.vector);
+		gsl_blas_daxpy(alpha, gsl_p_vector, gsl_x_vector);
+		gsl_blas_daxpy((0.0 - alpha), gsl_q_vector, gsl_r_vector);
 	}
 
 	for (i=1; i < total_ids; i++) {
-		id_to_node[i]->val = x_vector[i-1]; //gsl_vector_get(&gsl_x_vector.vector, i-1);
+		id_to_node[i]->val = gsl_vector_get(gsl_x_vector, i-1);
 	}
+
+
+}
+
+
+void solve_BI_CG_iter_method() {
+	unsigned long i;
+	unsigned int iter;
+	double normR = 0.0, normB = 0.0;
+	double alpha = 0.0, beta = 0.0, omega = 0.0;
+	double rho = 0.0, rho1 = 0.0;
+
+
+
+	gsl_vector_set_zero(gsl_x_vector);
+	//r = b
+	gsl_vector_memcpy(gsl_r_vector, &gsl_mna_vector.vector);
+	//r = r - Ax
+	gsl_blas_dgemv(CblasNoTrans, -1.0, &gsl_mna_array.matrix, gsl_x_vector, 1.0, gsl_r_vector);
+	//rT = r
+	gsl_vector_memcpy(gsl_rT_vector, gsl_r_vector);
+
+	for (iter = 0; iter < MAX_ITERATIONS; iter++) {
+		normR = gsl_blas_dnrm2(gsl_r_vector);
+		normB = gsl_blas_dnrm2(&gsl_mna_vector.vector);
+		if (normB == 0.0)
+			normB = 1.0;
+
+		if ((normR / normB) <= itol)
+			break;
+
+		solve_precond();	                              // M*z = r
+		Transpose_solve_precond();						  // M(T)*zT = rT
+
+		gsl_blas_ddot(gsl_rT_vector, gsl_z_vector, &rho); //rho = rT . z
+
+		if(fabs(rho) < EPS_DEFAULT){
+			printf(RED" 1) i : %d , Bi-CG failed\n"NRM,iter);
+			exit(EXIT_FAILURE);
+		}
+
+		if (iter == 0) {
+			gsl_vector_memcpy(gsl_p_vector, gsl_z_vector);  // p = z
+			gsl_vector_memcpy(gsl_pT_vector, gsl_zT_vector);  // pT = zT
+		}else {
+			beta = rho / rho1;
+			gsl_vector_scale(gsl_p_vector, beta);        // p = p*beta
+			gsl_vector_add(gsl_p_vector, gsl_z_vector);	 // p = p +z
+
+			gsl_vector_scale(gsl_pT_vector, beta);		 // pT = pT*beta
+			gsl_vector_add(gsl_pT_vector, gsl_zT_vector); // pT = pT +zT
+		}
+
+		rho1 = rho;
+
+		solve_q();                               // q = A . p
+
+		Transpose_solve_q();					// qT = A(T) . pT
+
+		gsl_blas_ddot(gsl_pT_vector, gsl_q_vector, &omega);    // omega = pT . q
+
+		/*printf("OMEGA = %lf\n", omega);*/
+		if(fabs(omega) < EPS_DEFAULT){
+			printf(RED" 2) i : %d , Bi-CG failed\n"NRM,iter);
+			exit(EXIT_FAILURE);
+		}
+
+		alpha = rho/omega;
+
+		gsl_blas_daxpy(alpha, gsl_p_vector, gsl_x_vector);			 // x = x + alpha*p
+		gsl_blas_daxpy((0.0 - alpha), gsl_q_vector, gsl_r_vector);   // r = r -alpha*q
+		gsl_blas_daxpy((0.0 - alpha), gsl_qT_vector, gsl_rT_vector); // rT = rT -alpha*qT
+	}
+
+	for (i=1; i < total_ids; i++) {
+		id_to_node[i]->val = gsl_vector_get(gsl_x_vector, i-1);
+	}
+
+
 }
 
 void solve_precond() {
-	gsl_vector_memcpy(&gsl_z_vector.vector, &gsl_r_vector.vector);
-	gsl_vector_div(&gsl_z_vector.vector, &gsl_M_array.vector);
+	gsl_vector_memcpy(gsl_z_vector,gsl_r_vector);
+	gsl_vector_div(gsl_z_vector, gsl_M_array);
 }
 
 void solve_q() {
-	gsl_blas_dgemv(CblasNoTrans, 1.0, &gsl_mna_array.matrix, ro_vector, 0.0, q_vector);
+	gsl_blas_dgemv(CblasNoTrans, 1.0, &gsl_mna_array.matrix, gsl_p_vector, 0.0, gsl_q_vector);
 }
 
+void Transpose_solve_precond() {
+	gsl_vector_memcpy(gsl_zT_vector,gsl_rT_vector);
+	gsl_vector_div(gsl_zT_vector, gsl_M_array);        //M_transpose = M
+}
+
+void Transpose_solve_q(){
+	gsl_blas_dgemv(CblasTrans, 1.0, &gsl_mna_array.matrix, gsl_pT_vector, 0.0, gsl_qT_vector);
+}
 
 // executes the command_list (command .OPTIONS is excluded from the list as it is executed during the parsing phase)
 void execute_commands() {
@@ -487,6 +559,8 @@ void execute_commands() {
 							solve_CG_iter_method();
 							break;
 						case BI_CG_SOLVER:
+							solve_BI_CG_iter_method();
+							break;
 						default:
 							break;
 					}
@@ -523,6 +597,8 @@ void execute_commands() {
 							solve_CG_iter_method();
 							break;
 						case BI_CG_SOLVER:
+							solve_BI_CG_iter_method();
+							break;
 						default:
 							break;
 					}
@@ -720,23 +796,40 @@ void fill_MNA_system() {
 
 }
 
+void free_gsl_vectors(){
+
+
+	gsl_vector_free(gsl_M_array);
+	gsl_M_array = NULL;
+	gsl_vector_free(gsl_x_vector);
+	gsl_x_vector = NULL;
+	gsl_vector_free(gsl_z_vector);
+	gsl_z_vector = NULL;
+	gsl_vector_free(gsl_r_vector);
+	gsl_r_vector = NULL;
+	gsl_vector_free(gsl_p_vector);
+	gsl_p_vector = NULL;
+	gsl_vector_free(gsl_q_vector);
+	gsl_q_vector = NULL;
+
+	if(solver_type == BI_CG_SOLVER){
+		gsl_vector_free(gsl_zT_vector);
+		gsl_zT_vector = NULL;
+		gsl_vector_free(gsl_rT_vector);
+		gsl_rT_vector = NULL;
+		gsl_vector_free(gsl_pT_vector);
+		gsl_pT_vector = NULL;
+		gsl_vector_free(gsl_qT_vector);
+		gsl_qT_vector = NULL;
+	}
+}
+
 
 void free_MNA_system() {
 	free(mna_array);
+	mna_array = NULL;
 	free(mna_vector);
-
-	if (x_vector != NULL)
-		free(x_vector);
-	if (z_vector != NULL)
-		free(z_vector);
-	if (r_vector != NULL)
-		free(r_vector);
-	if (M_array != NULL)
-		free(M_array);
-	if (ro_vector != NULL)
-		gsl_vector_free(ro_vector);
-	if (q_vector != NULL)
-		gsl_vector_free(q_vector);
+	mna_vector = NULL;
 }
 
 

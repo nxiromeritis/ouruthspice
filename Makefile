@@ -25,8 +25,8 @@ clean:
 	rm -rvf *.o $(EXECUTABLE) test lists
 	rm -rvf *.txt *.png draw.sh
 
-clean1:
+clean_obj:
 	rm -rvf *.o $(EXECUTABLE) test lists
 
-clean2:
+clean_outputs:
 	rm -rvf *.txt *.png draw.sh
