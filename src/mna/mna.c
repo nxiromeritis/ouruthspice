@@ -7,10 +7,10 @@
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_blas.h>
 
-#include "cir_parser.h"
-#include "spicy.h"
-#include "hashtable.h"
-#include "lists.h"
+#include "../cir_parser/cir_parser.h"
+#include "../spicy.h"
+#include "../hashtable/hashtable.h"
+#include "../lists/lists.h"
 #include "mna.h"
 
 double *mna_array = NULL;

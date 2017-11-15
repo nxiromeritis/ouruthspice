@@ -6,10 +6,10 @@
 #include <gsl/gsl_errno.h>
 
 #include "spicy.h"
-#include "lists.h"
-#include "hashtable.h"
-#include "cir_parser.h"
-#include "mna.h"
+#include "lists/lists.h"
+#include "hashtable/hashtable.h"
+#include "cir_parser/cir_parser.h"
+#include "mna/mna.h"
 
 
 int main(int argc, char *argv[]) {

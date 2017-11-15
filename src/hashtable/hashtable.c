@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include "cir_parser.h"
+#include "../cir_parser/cir_parser.h"
 #include "hashtable.h"
-#include "spicy.h"
+#include "../spicy.h"
 
 
 hashtable_t *HashTable = NULL;

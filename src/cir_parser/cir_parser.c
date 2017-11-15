@@ -5,9 +5,9 @@
 #include <ctype.h>
 
 #include "cir_parser.h"
-#include "hashtable.h"
-#include "spicy.h"
-#include "lists.h"
+#include "../hashtable/hashtable.h"
+#include "../spicy.h"
+#include "../lists/lists.h"
 
 
 // converts a string to uppercase string

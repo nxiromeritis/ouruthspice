@@ -2,10 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cir_parser.h"
-#include "spicy.h"
+#include "../cir_parser/cir_parser.h"
+#include "../spicy.h"
 #include "lists.h"
-#include "mna.h"
+#include "../mna/mna.h"
 
 
 list_head team1_list;

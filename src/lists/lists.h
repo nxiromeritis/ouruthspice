@@ -1,7 +1,7 @@
 #ifndef _LISTS_
 #define _LISTS_
 
-#include "hashtable.h"
+#include "../hashtable/hashtable.h"
 
 
 //typedef enum component_type {undefined, R, L, C, V, I, D, M, Q} c_type;
