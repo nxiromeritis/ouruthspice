@@ -54,17 +54,33 @@ int main(int argc, char *argv[]) {
 						   ((solver_type == 2)?"cg_solver":
 						   ((solver_type == 3)?"bi_cg_solver":"unknown_solver")))));
 	printf("ITOL: %e\n", itol);
+	printf("%sSPARSE\n", is_sparse?"":"NOT ");
 
-	init_MNA_system();
-	fill_MNA_system();
-	print_MNA_system();
 
+
+	if (is_sparse) {
+		init_triplet();
+		print_sparse_matrix(triplet_A);
+		create_compressed_column();
+		print_sparse_matrix(compr_col_A);
+	}
+	else {
+		init_MNA_system();
+		fill_MNA_system();
+		print_MNA_array();
+		print_MNA_vector();
+	}
+
+
+
+
+	// TODO ADD if is_sparse == 1 and call new solvers/functions
 	switch(solver_type) {
 		case LU_SOLVER:
-			decomp_lu_MNA();
+			decomp_lu();
 			break;
 		case CHOL_SOLVER:
-			decomp_cholesky_MNA();
+			decomp_cholesky();
 			break;
 		// iterative solving method. No need to decompose
 		case CG_SOLVER:
@@ -83,12 +99,12 @@ int main(int argc, char *argv[]) {
 
 	switch(solver_type) {
 		case LU_SOLVER:
-			solve_lu_MNA();
+			solve_lu();
 			gsl_permutation_free(gsl_p);
 			gsl_vector_free(gsl_x_vector);
 			break;
 		case CHOL_SOLVER:
-			solve_cholesky_MNA();
+			solve_cholesky();
 			gsl_vector_free(gsl_x_vector);
 			break;
 		case CG_SOLVER:
@@ -111,6 +127,11 @@ int main(int argc, char *argv[]) {
 	freeHashTable();
 	free_lists();
 	free_command_list();
+
+	if (css_S)
+		cs_sfree(css_S);
+	if (csn_N)
+		cs_nfree(csn_N);
 
 	return 0;
 }

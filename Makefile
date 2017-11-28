@@ -1,11 +1,11 @@
 CC = gcc
 CFLAGS = -g -Wall 
-OBJ = build/spicy.o build/cir_parser/cir_parser.o build/hashtable/hashtable.o build/lists/lists.o build/mna/mna.o
-BFOLDERS = build/ build/cir_parser/ build/hashtable/ build/lists/ build/mna/
+OBJ = build/spicy.o build/cir_parser/cir_parser.o build/hashtable/hashtable.o build/lists/lists.o build/mna/mna.o build/csparse/csparse.o
+BFOLDERS = build/ build/cir_parser/ build/hashtable/ build/lists/ build/mna/ build/csparse/
 EXECUTABLE = spicy
 DFLAGS = -DCOLORS_ON
 
-CLINK = -lgsl -lgslcblas
+CLINK = -lgsl -lgslcblas -lm
 
 all: $(OBJ)
 	@mkdir -p build
@@ -25,7 +25,7 @@ build/%.o: src/%.c src/%.h
 	$(CC) $(CFLAGS) $(DFLAGS) -c $< -o $@
 
 
-.PHONY: clean clean1 clean2
+.PHONY: clean clean_obj clean_outputs
 
 clean: 
 	rm -rvf $(OBJ) $(EXECUTABLE) $(BFOLDERS)

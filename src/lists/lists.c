@@ -72,6 +72,10 @@ void add_command_to_list(char *command) {
 				// update itol
 				parse_double(&itol, &token[5]);
 			}
+			else if (strncmp(token, "SPARSE", 6) == 0) {
+				// sparse matrixes
+				is_sparse = 1;
+			}
 			// else bypass argument (future arguments: ITER SPARSE)
 
 			token = strtok(NULL, delim);
