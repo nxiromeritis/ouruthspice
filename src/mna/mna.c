@@ -38,6 +38,8 @@ gsl_vector *gsl_rT_vector = NULL;
 gsl_vector *gsl_pT_vector = NULL;
 gsl_vector *gsl_qT_vector = NULL;
 gsl_permutation *gsl_p = NULL;
+double *p_vector = NULL;
+double *q_vector = NULL;
 
 byte solver_type = LU_SOLVER;
 byte is_sparse = 0;
@@ -51,6 +53,7 @@ void decomp_lu() {
 		css_S = cs_sqr(2, compr_col_A, 0);
 		csn_N = cs_lu(compr_col_A, css_S, 1);
 		cs_spfree(compr_col_A);
+		compr_col_A = NULL;
 	}
 	else {
 		gsl_x_vector = gsl_vector_alloc(mna_dimension_size);
@@ -71,6 +74,7 @@ void decomp_cholesky() {
 		css_S = cs_schol(1, compr_col_A);
 		csn_N = cs_chol(compr_col_A, css_S);
 		cs_spfree(compr_col_A);
+		compr_col_A = NULL;
 	}
 	else {
 		gsl_x_vector = gsl_vector_alloc(mna_dimension_size);
@@ -85,23 +89,63 @@ void decomp_cholesky() {
 
 
 void initialise_iter_methods() {
-	unsigned long i;
+	unsigned long i,p;
+	int k;
 
 
-	gsl_mna_array = gsl_matrix_view_array(mna_array, mna_dimension_size, mna_dimension_size);
-	gsl_mna_vector = gsl_vector_view_array(mna_vector, mna_dimension_size);
+	if(is_sparse){
 
-	gsl_M_array = gsl_vector_alloc(mna_dimension_size);
-	gsl_vector_set_all(gsl_M_array,1);
+		p_vector = (double *) calloc(mna_dimension_size,sizeof(double));
+		if (p_vector == NULL) {
+			printf("Error. Memory allocation problems. Exiting..\n");
+			exit(EXIT_FAILURE);
+		}
 
-	for (i = 0; i < mna_dimension_size; i++){
+		// this is necessary as a helping/temporary vector.
+		// the same helper vector can be used in solve qT aswell
+		q_vector = (double *) calloc(mna_dimension_size,sizeof(double));
+		if (q_vector == NULL) {
+			printf("Error. Memory allocation problems. Exiting..\n");
+			exit(EXIT_FAILURE);
+		}
 
-		// TODO add if is_sparse
-		if(  mna_array[(i * mna_dimension_size) + i] != 0 )
-			gsl_vector_set(gsl_M_array,i,mna_array[(i * mna_dimension_size) + i]);
+		gsl_mna_vector = gsl_vector_view_array(mna_vector, mna_dimension_size);
+
+		gsl_M_array = gsl_vector_alloc(mna_dimension_size);
+		gsl_vector_set_all(gsl_M_array,1);
+
+		for(k = 0; k < compr_col_A->n; k++){
+
+			for(p = compr_col_A ->p[k]; p < compr_col_A->p[k+1];p++){
+				if( k==compr_col_A->i[p]){
+					gsl_vector_set(gsl_M_array,k,compr_col_A->x[p]);
+				}
+			}
+		}
+
+		for(k = 0; k<mna_dimension_size;k++){
+			printf("M_array[%d] = %lf\n",k,gsl_vector_get(gsl_M_array,k));
+		}
 
 	}
+	else {
 
+		gsl_mna_array = gsl_matrix_view_array(mna_array, mna_dimension_size, mna_dimension_size);
+		gsl_mna_vector = gsl_vector_view_array(mna_vector, mna_dimension_size);
+
+		gsl_M_array = gsl_vector_alloc(mna_dimension_size);
+		gsl_vector_set_all(gsl_M_array,1);
+		for (i = 0; i < mna_dimension_size; i++){
+
+			// TODO add if is_sparse
+			if(  mna_array[(i * mna_dimension_size) + i] != 0 )
+				gsl_vector_set(gsl_M_array,i,mna_array[(i * mna_dimension_size) + i]);
+
+		}
+		for(k = 0; k<mna_dimension_size;k++){
+			printf("M_array[%d] = %lf\n",k,gsl_vector_get(gsl_M_array,k));
+		}
+	}
 
 
 	gsl_x_vector = gsl_vector_calloc(mna_dimension_size);
@@ -217,7 +261,7 @@ void solve_CG_iter_method() {
 	// our current initial x is zero so r=r
 	/*gsl_blas_dgemv(CblasNoTrans, -1.0, &gsl_mna_array.matrix, gsl_x_vector, 1.0, gsl_r_vector);*/
 
-	for (iter = 0; iter < MAX_ITERATIONS; iter++) {
+	for (iter = 0; iter < MAX(MIN_ITER, mna_dimension_size); iter++) {
 		normR = gsl_blas_dnrm2(gsl_r_vector);
 		normB = gsl_blas_dnrm2(&gsl_mna_vector.vector);
 		if (normB == 0.0)
@@ -232,7 +276,8 @@ void solve_CG_iter_method() {
 
 		if (iter == 0) {
 			gsl_vector_memcpy(gsl_p_vector, gsl_z_vector);
-		}else {
+		}
+		else {
 			beta = rho / rho1;
 			gsl_vector_scale(gsl_p_vector, beta);
 			gsl_vector_add(gsl_p_vector, gsl_z_vector);
@@ -244,6 +289,7 @@ void solve_CG_iter_method() {
 
 		gsl_blas_ddot(gsl_p_vector, gsl_q_vector, &tmp);
 		alpha = rho / tmp;
+
 
 		gsl_blas_daxpy(alpha, gsl_p_vector, gsl_x_vector);
 		gsl_blas_daxpy((0.0 - alpha), gsl_q_vector, gsl_r_vector);
@@ -277,7 +323,7 @@ void solve_BI_CG_iter_method() {
 	//rT = r
 	gsl_vector_memcpy(gsl_rT_vector, gsl_r_vector);
 
-	for (iter = 0; iter < MAX_ITERATIONS; iter++) {
+	for (iter = 0; iter < MAX(MIN_ITER, mna_dimension_size) ; iter++) {
 		normR = gsl_blas_dnrm2(gsl_r_vector);
 		normB = gsl_blas_dnrm2(&gsl_mna_vector.vector);
 		if (normB == 0.0)
@@ -299,7 +345,8 @@ void solve_BI_CG_iter_method() {
 		if (iter == 0) {
 			gsl_vector_memcpy(gsl_p_vector, gsl_z_vector);  // p = z
 			gsl_vector_memcpy(gsl_pT_vector, gsl_zT_vector);  // pT = zT
-		}else {
+		}
+		else {
 			beta = rho / rho1;
 			gsl_vector_scale(gsl_p_vector, beta);        // p = p*beta
 			gsl_vector_add(gsl_p_vector, gsl_z_vector);	 // p = p +z
@@ -341,8 +388,38 @@ void solve_precond() {
 	gsl_vector_div(gsl_z_vector, gsl_M_array);
 }
 
+// q = A.p
 void solve_q() {
-	gsl_blas_dgemv(CblasNoTrans, 1.0, &gsl_mna_array.matrix, gsl_p_vector, 0.0, gsl_q_vector);
+
+	unsigned long i;
+
+	if(is_sparse) {
+
+		for( i=0; i<mna_dimension_size; i++){
+			p_vector[i] = gsl_vector_get(gsl_p_vector, i);
+		}
+
+		// q must be zero so that q = A.p + q = A.p
+		cs_gaxpy(compr_col_A,p_vector,q_vector);
+
+		for( i=0; i<mna_dimension_size; i++){
+			gsl_vector_set(gsl_q_vector,i,q_vector[i]);
+		}
+
+		// restore q
+		memset(q_vector, 0, mna_dimension_size*sizeof(double));
+
+	}
+	else {
+		gsl_blas_dgemv(CblasNoTrans, 1.0, &gsl_mna_array.matrix, gsl_p_vector, 0.0, gsl_q_vector);
+	}
+
+
+	// DEBUG
+	/*printf("solve_q (%s)\n", is_sparse?"sparse":"not sparse");*/
+	/*for (i=0; i < mna_dimension_size; i++) {*/
+		/*printf("q[%lu] = %lf\n", i, gsl_vector_get(gsl_q_vector, i));*/
+	/*}*/
 }
 
 void Transpose_solve_precond() {
@@ -350,9 +427,43 @@ void Transpose_solve_precond() {
 	gsl_vector_div(gsl_zT_vector, gsl_M_array);        //M_transpose = M
 }
 
+
 void Transpose_solve_q(){
-	gsl_blas_dgemv(CblasTrans, 1.0, &gsl_mna_array.matrix, gsl_pT_vector, 0.0, gsl_qT_vector);
+
+	int i,p;
+
+	if(is_sparse) {
+
+		for( i=0; i<mna_dimension_size; i++){
+			p_vector[i] = gsl_vector_get(gsl_pT_vector, i);
+		}
+
+		// q must be zero so that q = A.p + q = A.p
+
+
+		for(i = 0; i < compr_col_A->n; i++){
+
+			for(p = compr_col_A ->p[i]; p < compr_col_A->p[i+1];p++){
+
+				q_vector[i]=q_vector[i]+compr_col_A->x[p]*p_vector[compr_col_A->i[p]];
+			}
+		}
+
+		for( i=0; i<mna_dimension_size; i++){
+			gsl_vector_set(gsl_qT_vector,i,q_vector[i]);
+		}
+
+		// restore q
+		memset(q_vector, 0, mna_dimension_size*sizeof(double));
+
+	}
+	else {
+		gsl_blas_dgemv(CblasTrans, 1.0, &gsl_mna_array.matrix, gsl_pT_vector, 0.0, gsl_qT_vector);
+
+
+	}
 }
+
 
 // executes the command_list (command .OPTIONS is excluded from the list as it is executed during the parsing phase)
 void execute_commands() {
@@ -622,15 +733,17 @@ void execute_commands() {
 
 				for (j=start; j < end + 0.000000001; j = j + jump) {
 
-					if (is_sparse) {
+					if ( (is_sparse) && ((solver_type == 0)||( solver_type ==1)) ) {
 						// restore default b vector values
 						memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
-						if( (idx1+1) != 0 )
+						if( (idx1+1) != 0 ) {
 							mna_vector[idx1] += var->op_point_val;
 							mna_vector[idx1] -= j;			// add new value to b vector
-						if( (idx2+1) != 0 )
+						}
+						if( (idx2+1) != 0 ) {
 							mna_vector[idx2] -= var->op_point_val;
 							mna_vector[idx2] += j;			// add new value to b vector
+						}
 					}
 					else {
 						if( (idx1+1) != 0 ){
@@ -665,7 +778,7 @@ void execute_commands() {
 					fprintf(node_fp, "%lf\t\t%e\n", j, node->val);
 				}
 
-				if (is_sparse) {
+				if ( (is_sparse) && ((solver_type == 0)||( solver_type ==1)) ){
 					// restore default b vector values
 					memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
 				}
@@ -687,7 +800,7 @@ void execute_commands() {
 				for (j=start; j < end + 0.00000001; j = j + jump) {
 
 					// position in list is unique
-					if (is_sparse) {
+					if ( (is_sparse) && ((solver_type == 0)||( solver_type ==1)) ){
 						// restore default b vector values
 						memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
 					}
@@ -715,7 +828,7 @@ void execute_commands() {
 					fprintf(node_fp, "%lf\t\t%e\n", j, node->val);
 				}
 
-				if (is_sparse) {
+				if ( (is_sparse) && ((solver_type == 0)||( solver_type ==1)) ){
 					// restore default b vector values
 					memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
 				}
@@ -802,7 +915,7 @@ void print_sparse_matrix(cs *A) {
 
 
 void create_compressed_column() {
-
+	//printf("\n\n\n\n\n\n\\n\n\n\n\n");
 	compr_col_A = cs_compress(triplet_A);
 	cs_dupl(compr_col_A);
 	cs_spfree(triplet_A);
@@ -1067,6 +1180,9 @@ void dump_MNA_nodes() {
 		exit(EXIT_FAILURE);
 	}
 
+	// write grounding with name G, and value 0
+	// changing the groudning name in main leads to errors
+	fprintf(fp, "G\t\t0.00000e+00\n");
 	for (i=1; i < total_ids; i++) {
 		/*fprintf(fp, "%s\t\t%lf\n", id_to_node[i]->name, id_to_node[i]->val);*/
 		fprintf(fp, "%s\t\t%.5e\n", id_to_node[i]->name, id_to_node[i]->val);

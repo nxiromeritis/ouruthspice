@@ -10,7 +10,11 @@ extern double *mna_vector;
 extern double *default_mna_vector_copy;
 extern unsigned long mna_dimension_size;
 
-#define MAX_ITERATIONS 	100	//Placeholder
+#define MAX(a, b) ((a)>(b)?(a):(b))
+#define MIN(a, b) ((a)<(b)?(a):(b))
+
+#define MIN_ITER		100
+#define MAX_ITER		100
 #define ITOL_DEFAULT	10e-6
 #define EPS_DEFAULT 	10e-16
 #define LU_SOLVER		0
@@ -41,6 +45,8 @@ extern gsl_vector *gsl_rT_vector;
 extern gsl_vector *gsl_pT_vector;
 extern gsl_vector *gsl_qT_vector;
 extern gsl_permutation *gsl_p;
+extern double *p_vector;
+extern double *q_vector;
 
 // functions for sparse matrixes
 extern void init_triplet();

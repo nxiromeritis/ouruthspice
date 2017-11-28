@@ -133,5 +133,13 @@ int main(int argc, char *argv[]) {
 	if (csn_N)
 		cs_nfree(csn_N);
 
+	if(compr_col_A)
+		cs_spfree(compr_col_A);
+	if(p_vector)
+		free(p_vector);
+	if(q_vector)
+		free(q_vector);
+
+
 	return 0;
 }
