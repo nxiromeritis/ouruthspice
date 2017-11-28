@@ -1,0 +1,53 @@
+% this is a comment
+V1 5 0 2
+V2 3 2 0.2
+V3 7 6 2
+I1 4 8 1e-3
+
+.random command
+
+I2 0 6 1e-3
+
+
+R1 1 5 1.5 %comment here 3 4 2 34 1
+* this is another comment
+R2 1 2 1
+
+
+R3 5 2 50
+
+
+R4 5 6 0.1
+R5 2 6 1.5*comment heh
+R6 3 4 0.2
+
+
+R7 8 0 1e3
+R8 4 0 10
+
+.op
+.end
+.dC 2 4 0.1
+.dc 3 4 5
+.dc (no dcs before me)
+
+.pRINT hello?
+.PLOT e e e e
+.daw
+.OPTIONS SDF
+.OpTiOnS
+
+%the next command does not have a space char after the name
+.DC a
+.dc b
+.dC c
+
+.OPTIONS
+
+.optionsdlkfjs
+
+
+%this has and thus must be approved
+.DC
+
+.options                j

@@ -1,4 +1,3 @@
-benchmarks/
 *.o
 lists
 test
@@ -6,5 +5,3 @@ spicy
 .*.*.swp
 .*.swp
 *.vim
-*.txt
-*.out
