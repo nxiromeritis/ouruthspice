@@ -4,6 +4,7 @@
 #include <gsl/gsl_linalg.h>
 #include <gsl/gsl_errno.h>
 #include "../csparse/csparse.h"
+#include "../lists/lists.h"
 
 extern double *mna_array;
 extern double *mna_vector;
@@ -22,10 +23,14 @@ extern unsigned long mna_dimension_size;
 #define CG_SOLVER		2
 #define BI_CG_SOLVER	3
 
+#define TRAPEZOIDAL		0
+#define BACKWARD_EULER	1
+
 extern double itol;
 
 extern byte solver_type;
 extern byte is_sparse;
+extern byte tr_method;
 
 extern cs *triplet_A;
 extern cs *compr_col_A;
@@ -75,5 +80,12 @@ extern void free_gsl_vectors();
 extern void solve_BI_CG_iter_method();
 extern void Transpose_solve_precond();
 extern void Transpose_solve_q();
+
+
+// functions for transient spec
+extern double get_exp_val(ExpInfoT *data, double t);
+extern double get_sin_val(SinInfoT *data, double t);
+extern double get_pulse_val(PulseInfoT *data, double t);
+extern double get_pwl_val(PwlInfoT *data, double t);
 
 #endif

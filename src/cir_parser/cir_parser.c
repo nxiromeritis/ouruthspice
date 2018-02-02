@@ -29,6 +29,8 @@ byte component_type_is_valid(char c) {
 }
 
 
+// Splits plot commands with multiple nodes into multiple commands
+// for example .PLOT V(1) V(2) will be split into .PLOT V(1) and .PLOT V(2)
 void parse_plot(char *command){					/* .PLOT V(1) V(2) -> .PLOT V(1) / .PLOT V(2)  */
 
 	const char delim[5] = " \r\t\n";
@@ -55,6 +57,7 @@ void parse_plot(char *command){					/* .PLOT V(1) V(2) -> .PLOT V(1) / .PLOT V(2
 	plot_command = NULL;
 }
 
+
 // parses the command and stores it into the command list
 // Unknown commands are bypassed. Prints a Warning message in that case
 void parse_command(char *command) {
@@ -69,7 +72,8 @@ void parse_command(char *command) {
 		 (strcmp(command, ".OPTIONS\t") == 0) || \
 		 (strcmp(command, ".OPTIONS") == 0) || \
 		 (strncmp(command, ".PRINT ", 7) == 0) || \
-		 (strncmp(command, ".PLOT ", 6) == 0) ) {
+		 (strncmp(command, ".PLOT ", 6) == 0)  || \
+		 (strncmp(command, ".TRAN ", 6) == 0) ) {
 
 		// erase possible \n at the end of the command (probably not necessary)
 		str_ptr = strchr(command, '\n');
@@ -78,16 +82,13 @@ void parse_command(char *command) {
 
 		// adds the command to list
 		// Additional checks for the commands will be performed during command execution
-
 		if((strncmp(command, ".PRINT ", 7) == 0) || \
 		 (strncmp(command, ".PLOT ", 6) == 0)){
-
 		 	parse_plot(command);
 
-		}else{
+		} else {
 			add_command_to_list(command);
 		}
-
 	}
 	else {
 		printf(YEL "Warning" NRM ": Unknown command "
@@ -223,7 +224,14 @@ void parse_cir(char *filename) {
 	// offset to pass possible non ascci invisible characters from line
 	unsigned int line_offset = 0;
 
+	// variables used for transient analysis (we have THAT many for optical reasons
+	int tr_type;
+	void *tran_spec_data;
+	double v1, v2, v3, v4, v5, v6, v7;
+	double *times, *values;
+	unsigned int total_tuples;
 
+	int i;
 
 	fp = fopen(filename, "r");
 	if (fp == NULL) {
@@ -268,6 +276,12 @@ void parse_cir(char *filename) {
 		node3_name = NULL;
 		node4_name = NULL;
 		model_name = NULL;
+		tr_type = TR_TYPE_NONE;
+		tran_spec_data = NULL;
+		v1 = 0; v2 = 0; v3 = 0;
+		v4 = 0; v5 = 0; v6 = 0; v7 = 0;
+		times = NULL; values = NULL;
+		total_tuples = 0;
 
 		// -1 if not present or part of the component parsed
 		val = -1;
@@ -286,7 +300,6 @@ void parse_cir(char *filename) {
 			parse_command(&line[line_offset]);
 			continue; // nothing more for this line
 		}
-
 
 
 		// not a command. parse the component information
@@ -379,14 +392,9 @@ void parse_cir(char *filename) {
 			}
 			else if (tok_count == 5) {
 
-				if ((toupper(type) == 'I') || (toupper(type) == 'R') || (toupper(type) == 'C')) {
-					if ((strcmp(token, "G2") == 0) || (strcmp(token, "g2") == 0)) {
-						has_G2 = 1;
-					}
-					else {
-						printf("Syntax error. Unknown field (%s)\n", token);
-						exit(EXIT_FAILURE);
-					}
+				if (((toupper(type) == 'I') || (toupper(type) == 'R') || (toupper(type) == 'C')) &&
+				   ((strcmp(token, "G2") == 0) || (strcmp(token, "g2") == 0))) {
+					has_G2 = 1;
 				}
 				else if ((toupper(type) == 'D')) {
 					if (parse_double(&val, token) == 0) {
@@ -408,8 +416,273 @@ void parse_cir(char *filename) {
 						exit(EXIT_FAILURE);
 					}
 				}
+				else if ((toupper(type) == 'I') || (toupper(type) == 'V')) { // transient analysis
+
+				    /* ******************************* *
+					 * START OF TRANSIENT SPEC PARSING *
+					 * ******************************* */
+
+					if ((strstr("EXP SIN PULSE PWL", token) != NULL) \
+					 || (strstr("exp sin pulse pwl", token) != NULL)) {
+						printf("Transient Spec Found\n");
+
+						// The second letter of the words EXP, SIN, PULSE and PWL is unique
+						// Take advantage of this for some easy and lazy checks
+						if (toupper(token[1] == 'W')) { // PWL
+							printf("PWL function\n");
+							tr_type = TR_TYPE_PWL;
+
+							// iterate through tuples
+							total_tuples = 0;
+							while (1) {
+
+								// read time
+								token = strtok(NULL, delim);
+
+								// no more tuples
+								if (token == NULL)
+									break;
+
+								// temporarily store time into v1
+								if (parse_double(&v1, &token[1]) == 0) {
+									printf("Error. Value (%s) cannot be converted to double\n", token);
+									free(times);
+									free(values);
+									exit(EXIT_FAILURE);
+								}
+
+								// each time should be bigger than the previous one
+								if (total_tuples > 0) {
+									if (v1 <= times[total_tuples-1]) {
+										printf("Error. Tuple time shouldn't be smaller "
+												"than previous time\n");
+										free(times);
+										free(values);
+										exit(EXIT_FAILURE);
+									}
+								}
+
+								// read value
+								token = strtok(NULL, delim);
+								if (token == NULL) {
+									printf("Error. Incomplete PWL tuple.\n");
+									free(times);
+									free(values);
+									exit(EXIT_FAILURE);
+								}
+
+
+								// check for ')'
+								if (strchr(token, ')') == NULL) {
+									printf("Error. Parentheses must close directly after value (%s)\n",\
+									token);
+									free(times);
+									free(values);
+									exit(EXIT_FAILURE);
+								}
+
+								token[strlen(token)-1] = '\0';  // get rid of ')'
+								if (parse_double(&v2, token) == 0) {
+									printf("Error. Value (%s) cannot be converted to double\n", token);
+									free(times);
+									free(values);
+									exit(EXIT_FAILURE);
+								}
+								token[strlen(token)] = ')';     // recover previously deleted ')'
+
+
+								// store the (time value) tuple
+								total_tuples++;
+								times  = (double *) realloc(times, total_tuples*sizeof(double));
+								values = (double *) realloc(values, total_tuples*sizeof(double));
+								if ((times == NULL) || (values == NULL)) {
+									printf("Error. Memory allocation problems. Exiting..\n");
+									exit(EXIT_FAILURE);
+								}
+
+								times[total_tuples-1] = v1;
+								values[total_tuples-1] = v2;
+
+							}
+
+							printf("tuples (%d): (times, values) = ", total_tuples);
+							for (i = 0; i < total_tuples; i++) {
+								printf("(%lf, %lf) ", times[i], values[i]);
+							}
+							printf("\n");
+
+						}
+						else if (strchr("XIU", toupper(token[1])) != NULL) { // eXp sIn pUlse
+
+							if (toupper(token[1]) == 'X')
+								tr_type = TR_TYPE_EXP;
+							else if (toupper(token[1]) == 'I')
+								tr_type = TR_TYPE_SIN;
+							else
+								tr_type = TR_TYPE_PULSE;
+
+							// parse i1
+							token = strtok(NULL, delim);
+							if (parse_double(&v1, &token[1]) == 0) {
+								printf("Syntax error. Value (%s) cannot be converted to double\n", token);
+								exit(EXIT_FAILURE);
+							}
+
+							// parse i2 (for exp and pulse) or ia (for sin)
+							token = strtok(NULL, delim);
+							if (parse_double(&v2, token) == 0) {
+								printf("Syntax error. Value (%s) cannot be converted to double\n", token);
+								exit(EXIT_FAILURE);
+							}
+
+							// parse td1 (exp) or fr (sin) or td (pulse)
+							token = strtok(NULL, delim);
+							if (parse_double(&v3, token) == 0) {
+								printf("Syntax error. Value (%s) cannot be converted to double\n", token);
+								exit(EXIT_FAILURE);
+							}
+
+							// parse tc1 (exp) or td (sin) or tr (pulse)
+							token = strtok(NULL, delim);
+							if (parse_double(&v4, token) == 0) {
+								printf("Syntax error. Value (%s) cannot be converted to double\n", token);
+								exit(EXIT_FAILURE);
+							}
+
+							// parse td2 (exp) or df (sin) or tf (pulse)
+							token = strtok(NULL, delim);
+							if (parse_double(&v5, token) == 0) {
+								printf("Syntax error. Value (%s) cannot be converted to double\n", token);
+								exit(EXIT_FAILURE);
+							}
+
+							// parse the last arguments
+							if (tr_type == TR_TYPE_EXP) {  // exp function
+								printf("EXP function\n");
+
+								// parse tc2 (this is the 6th and last argument of exp function)
+								token = strtok(NULL, delim);
+
+								// check for ')'
+								if (strchr(token, ')') == NULL) {
+									printf("Error. Parenthesis must close directly after value (%s)\n",\
+									token);
+									exit(EXIT_FAILURE);
+								}
+
+								token[strlen(token)-1] = '\0'; // get rid of ')'
+								if (parse_double(&v6, token) == 0) {
+									printf("Error. Value (%s) cannot be converted to double\n", token);
+									exit(EXIT_FAILURE);
+								}
+								token[strlen(token)] = ')';    // recover previously deleted ')'
+
+
+								// check if there is another argument (syntax error)
+								token = strtok(NULL, delim);
+								if (token != NULL) {
+									printf("Error. Too many fields in transient function\n");
+									exit(EXIT_FAILURE);
+								}
+							}
+							else if (tr_type == TR_TYPE_SIN) {
+								printf("SIN function\n");
+
+								// parse tc2 (this is the 6th and last argument of sin function)
+								token = strtok(NULL, delim);
+
+								// check for ')'
+								if (strchr(token, ')') == NULL) {
+									printf("Error. Parenthesis must close directly after value (%s)\n",\
+									token);
+									exit(EXIT_FAILURE);
+								}
+
+								token[strlen(token)-1] = '\0'; // get rid of ')'
+								if (parse_double(&v6, token) == 0) {
+									printf("Error. Value (%s) cannot be converted to double\n", token);
+									exit(EXIT_FAILURE);
+								}
+								token[strlen(token)] = ')';    // recover previously deleted ')'
+
+
+								// check if there is another argument (syntax error)
+								token = strtok(NULL, delim);
+								if (token != NULL) {
+									printf("Error. Too many fields in transient function\n");
+									exit(EXIT_FAILURE);
+								}
+
+							}
+							else  { // if (toupper(token[1]) == 'U')
+								printf("PULSE function\n");
+
+								// parse pw (this is the 6th argument of pulse function)
+								token = strtok(NULL, delim);
+								if (parse_double(&v6, token) == 0) {
+									printf("Error. Value (%s) cannot be converted to double\n", token);
+									exit(EXIT_FAILURE);
+								}
+
+								// parse per (this is the 7th and last argument of pulse function)
+								token = strtok(NULL, delim);
+
+								// check for ')'
+								if (strchr(token, ')') == NULL) {
+									printf("Error. Parenthesis must close directly after value (%s)\n",\
+									token);
+									exit(EXIT_FAILURE);
+								}
+
+								token[strlen(token)-1] = '\0';	// get rid of ')'
+								if (parse_double(&v7, token) == 0) {
+									printf("Error. Value (%s) cannot be converted to double\n", token);
+									exit(EXIT_FAILURE);
+								}
+								token[strlen(token)] = ')';		// recover previously deleted ')'
+
+
+								// check if there is another argument (syntax error)
+								token = strtok(NULL, delim);
+								if (token != NULL) {
+									printf("Error. Too many fields in transient function\n");
+									exit(EXIT_FAILURE);
+								}
+
+								// check if the period of the pulse if not big enough
+								// td + per must be bigger than td + tr + tf + pw
+								if ((v3 + v7) < (v3 + v4 + v5 + v6)) {
+									printf(RED "Error: " NRM "Pulse period not big enough\n");
+									exit(EXIT_FAILURE);
+								}
+							}
+
+
+							// print the parsed arguments
+							printf("arg1=%lf, arg2=%lf, arg3=%lf, arg4=%lf, "
+								   "arg5=%lf, arg6=%lf, arg7=%lf\n", \
+									v1, v2, v3, v4, v5, v6, v7);
+
+						}
+						else {
+							printf("Error. Unknown transient function (%s)\n", token);
+							exit(EXIT_FAILURE);
+						}
+
+						break;
+					}
+					else {
+						printf("syntax error. Type '%c' has unknown fifth field (%s)\n", type, token);
+						exit(EXIT_FAILURE);
+					}
+
+					/* ***************************** *
+					 * END OF TRANSIENT SPEC PARSING *
+					 * ***************************** */
+
+				}
 				else {
-					printf("Syntax error. Type '%c' doesn't have a fifth field\n", type);
+					printf("Syntax error. Type '%c' has unknown fifth field (%s)\n", type, token);
 					exit(EXIT_FAILURE);
 				}
 
@@ -419,7 +692,7 @@ void parse_cir(char *filename) {
 				if (toupper(type) == 'M') {
 					model_name = strdup(token);
 					if (model_name == NULL) {
-						printf("Error. Memory allocation problem.s Exiting..\n");
+						printf("Error. Memory allocation problems. Exiting..\n");
 						exit(EXIT_FAILURE);
 					}
 				}
@@ -429,8 +702,281 @@ void parse_cir(char *filename) {
 						exit(EXIT_FAILURE);
 					}
 				}
+				else if (toupper(type) == 'I') {  // transient analysis (I had G2 field)
+
+					/* ******************************* *
+					 * START OF TRANSIENT SPEC PARSING *
+					 * ******************************* */
+
+					// is G2 was found at 'I' component than transient spec might start
+					// at the sixth field/token instead of the fifth
+					if (has_G2 == 1) {
+						if ((strstr("EXP PULSE SIN PWL", token) != NULL) \
+						 || (strstr("exp pulse sin pwl", token) != NULL)) {
+							printf("Transient Spec Found\n");
+
+							// The second letter of the words EXP, SIN, PULSE and PWL is unique
+							// Take advantage of this for some easy and lazy checks
+							if (toupper(token[1] == 'W')) { // PWL
+								printf("PWL function\n");
+								tr_type = TR_TYPE_PWL;
+
+								// iterate through tuples
+								total_tuples = 0;
+								while (1) {
+
+									// read time
+									token = strtok(NULL, delim);
+
+									// no more tuples
+									if (token == NULL)
+										break;
+
+									// temporarily store time into v1
+									if (parse_double(&v1, &token[1]) == 0) {
+										printf("Error. Value (%s) cannot be converted to double\n", token);
+										free(times);
+										free(values);
+										exit(EXIT_FAILURE);
+									}
+
+									// each time should be bigger than the previous one
+									if (total_tuples > 0) {
+										if (v1 <= times[total_tuples-1]) {
+											printf("Error. Tuple time shouldn't be smaller "
+													"than previous time\n");
+											free(times);
+											free(values);
+											exit(EXIT_FAILURE);
+										}
+									}
+
+									// read value
+									token = strtok(NULL, delim);
+									if (token == NULL) {
+										printf("Error. Incomplete PWL tuple.\n");
+										free(times);
+										free(values);
+										exit(EXIT_FAILURE);
+									}
+
+
+									// check for ')'
+									if (strchr(token, ')') == NULL) {
+										printf("Error. Parentheses must close directly after value (%s)\n",\
+										token);
+										free(times);
+										free(values);
+										exit(EXIT_FAILURE);
+									}
+
+									token[strlen(token)-1] = '\0';  // get rid of ')'
+									if (parse_double(&v2, token) == 0) {
+										printf("Error. Value (%s) cannot be converted to double\n", token);
+										free(times);
+										free(values);
+										exit(EXIT_FAILURE);
+									}
+									token[strlen(token)] = ')';     // recover previously deleted ')'
+
+
+									// store the (time value) tuple
+									total_tuples++;
+									times  = (double *) realloc(times, total_tuples*sizeof(double));
+									values = (double *) realloc(values, total_tuples*sizeof(double));
+									if ((times == NULL) || (values == NULL)) {
+										printf("Error. Memory allocation problems. Exiting..\n");
+										exit(EXIT_FAILURE);
+									}
+
+									times[total_tuples-1] = v1;
+									values[total_tuples-1] = v2;
+
+								}
+
+
+								if (total_tuples == 0) {
+									printf(RED "Error: " NRM "No tuples given in PWL\n");
+									exit(EXIT_FAILURE);
+								}
+
+
+								printf("tuples (%d): (times, values) = ", total_tuples);
+								for (i = 0; i < total_tuples; i++) {
+									printf("(%lf, %lf) ", times[i], values[i]);
+								}
+								printf("\n");
+
+							}
+							else if (strchr("XIU", toupper(token[1])) != NULL) { // eXp sIn pUlse
+
+								if (toupper(token[1]) == 'X')
+									tr_type = TR_TYPE_EXP;
+								else if (toupper(token[1]) == 'I')
+									tr_type = TR_TYPE_SIN;
+								else
+									tr_type = TR_TYPE_PULSE;
+
+								// parse i1
+								token = strtok(NULL, delim);
+								if (parse_double(&v1, &token[1]) == 0) {
+									printf("Syntax error. Value (%s) cannot be converted to double\n", token);
+									exit(EXIT_FAILURE);
+								}
+
+								// parse i2 (for exp and pulse) or ia (for sin)
+								token = strtok(NULL, delim);
+								if (parse_double(&v2, token) == 0) {
+									printf("Syntax error. Value (%s) cannot be converted to double\n", token);
+									exit(EXIT_FAILURE);
+								}
+
+								// parse td1 (exp) or fr (sin) or td (pulse)
+								token = strtok(NULL, delim);
+								if (parse_double(&v3, token) == 0) {
+									printf("Syntax error. Value (%s) cannot be converted to double\n", token);
+									exit(EXIT_FAILURE);
+								}
+
+								// parse tc1 (exp) or td (sin) or tr (pulse)
+								token = strtok(NULL, delim);
+								if (parse_double(&v4, token) == 0) {
+									printf("Syntax error. Value (%s) cannot be converted to double\n", token);
+									exit(EXIT_FAILURE);
+								}
+
+								// parse td2 (exp) or df (sin) or tf (pulse)
+								token = strtok(NULL, delim);
+								if (parse_double(&v5, token) == 0) {
+									printf("Syntax error. Value (%s) cannot be converted to double\n", token);
+									exit(EXIT_FAILURE);
+								}
+
+								// parse the last arguments
+								if (tr_type == TR_TYPE_EXP) {  // exp function
+									printf("EXP function\n");
+
+									// parse tc2 (this is the 6th and last argument of exp function)
+									token = strtok(NULL, delim);
+
+									// check for ')'
+									if (strchr(token, ')') == NULL) {
+										printf("Error. Parenthesis must close directly after value (%s)\n",\
+										token);
+										exit(EXIT_FAILURE);
+									}
+
+									token[strlen(token)-1] = '\0'; // get rid of ')'
+									if (parse_double(&v6, token) == 0) {
+										printf("Error. Value (%s) cannot be converted to double\n", token);
+										exit(EXIT_FAILURE);
+									}
+									token[strlen(token)] = ')';    // recover previously deleted ')'
+
+
+									// check if there is another argument (syntax error)
+									token = strtok(NULL, delim);
+									if (token != NULL) {
+										printf("Error. Too many fields in transient function\n");
+										exit(EXIT_FAILURE);
+									}
+								}
+								else if (tr_type == TR_TYPE_SIN) {
+									printf("SIN function\n");
+
+									// parse tc2 (this is the 6th and last argument of sin function)
+									token = strtok(NULL, delim);
+
+									// check for ')'
+									if (strchr(token, ')') == NULL) {
+										printf("Error. Parenthesis must close directly after value (%s)\n",\
+										token);
+										exit(EXIT_FAILURE);
+									}
+
+									token[strlen(token)-1] = '\0'; // get rid of ')'
+									if (parse_double(&v6, token) == 0) {
+										printf("Error. Value (%s) cannot be converted to double\n", token);
+										exit(EXIT_FAILURE);
+									}
+									token[strlen(token)] = ')';    // recover previously deleted ')'
+
+
+									// check if there is another argument (syntax error)
+									token = strtok(NULL, delim);
+									if (token != NULL) {
+										printf("Error. Too many fields in transient function\n");
+										exit(EXIT_FAILURE);
+									}
+
+								}
+								else  { // if (toupper(token[1]) == 'U')
+									printf("PULSE function\n");
+
+									// parse pw (this is the 6th argument of pulse function)
+									token = strtok(NULL, delim);
+									if (parse_double(&v6, token) == 0) {
+										printf("Error. Value (%s) cannot be converted to double\n", token);
+										exit(EXIT_FAILURE);
+									}
+
+									// parse per (this is the 7th and last argument of pulse function)
+									token = strtok(NULL, delim);
+
+									// check for ')'
+									if (strchr(token, ')') == NULL) {
+										printf("Error. Parenthesis must close directly after value (%s)\n",\
+										token);
+										exit(EXIT_FAILURE);
+									}
+
+									token[strlen(token)-1] = '\0';	// get rid of ')'
+									if (parse_double(&v7, token) == 0) {
+										printf("Error. Value (%s) cannot be converted to double\n", token);
+										exit(EXIT_FAILURE);
+									}
+									token[strlen(token)] = ')';		// recover previously deleted ')'
+
+
+									// check if there is another argument (syntax error)
+									token = strtok(NULL, delim);
+									if (token != NULL) {
+										printf("Error. Too many fields in transient function\n");
+										exit(EXIT_FAILURE);
+									}
+								}
+
+
+								// print the parsed arguments
+								printf("arg1=%lf, arg2=%lf, arg3=%lf, arg4=%lf, "
+									   "arg5=%lf, arg6=%lf, arg7=%lf\n", \
+										v1, v2, v3, v4, v5, v6, v7);
+
+							}
+							else {
+								printf("Error. Unknown transient function (%s)\n", token);
+								exit(EXIT_FAILURE);
+							}
+
+							break;
+						}
+						else {
+							printf("syntax error. Type '%c' has unknown sixth field (%s)\n", type, token);
+							exit(EXIT_FAILURE);
+						}
+					}
+					else {
+						printf("Syntax error. Type %c has unknown sixth field (%s)\n", type, token);
+						exit(EXIT_FAILURE);
+					}
+
+					/* ***************************** *
+					 * END OF TRANSIENT SPEC PARSING *
+					 * ***************************** */
+
+				}
 				else {
-					printf("Syntax error. Type '%c' doesn't have a 6th field\n", type);
+					printf("Syntax error. Type '%c' cannot have a 6th field\n", type);
 					exit(EXIT_FAILURE);
 				}
 
@@ -494,14 +1040,89 @@ void parse_cir(char *filename) {
 		// Search for node and if it doesn't exist add it to the hash table and
 		// give assign: node->id = ++id;
 
-		// V<name> <node1_name> <node2_name> <val>
-		// I<name> <node1_name> <node2_name> <val> [G2]
+		// V<name> <node1_name> <node2_name> <val> [transient_spec]
+		// I<name> <node1_name> <node2_name> <val> [G2] [transient_spec]
 		// R<name> <node1_name> <node2_name> <val> [G2]
 		// C<name> <node1_name> <node2_name> <val> [G2]
 		// L<name> <node1_name> <node2_name> <val>
 		// D<name> <node1_name> <node2_name> <model_name> [<val>]
 		// M<name> <node1_name> <node2_name> <node3_name> <node4_name> <model_name> L=<val> W=<val>
 		// Q<name> <node1_name> <node2_name> <node3_name> <model_name> [<val>]
+
+
+
+		// Create structures for transient analysis info
+		// Note: update the free functions of the lists and delete the frees below (done)
+		/*free(times);*/
+		/*free(values);*/
+		switch (tr_type) {
+			case TR_TYPE_NONE:
+				tran_spec_data = NULL;
+				break;
+			case TR_TYPE_EXP:
+				tran_spec_data = (void *) malloc(sizeof(ExpInfoT));
+				if (tran_spec_data == NULL) {
+					printf("Error Memory allocation problems. Exiting..\n");
+					exit(EXIT_FAILURE);
+				}
+
+				((ExpInfoT *)tran_spec_data)->i1 = v1;
+				((ExpInfoT *)tran_spec_data)->i2 = v2;
+				((ExpInfoT *)tran_spec_data)->td1 = v3;
+				((ExpInfoT *)tran_spec_data)->tc1 = v4;
+				((ExpInfoT *)tran_spec_data)->td2 = v5;
+				((ExpInfoT *)tran_spec_data)->tc2 = v6;
+
+				break;
+			case TR_TYPE_SIN:
+				tran_spec_data = (void *) malloc(sizeof(SinInfoT));
+				if (tran_spec_data == NULL) {
+					printf("Error Memory allocation problems. Exiting..\n");
+					exit(EXIT_FAILURE);
+				}
+
+				((SinInfoT *)tran_spec_data)->i1 = v1;
+				((SinInfoT *)tran_spec_data)->ia = v2;
+				((SinInfoT *)tran_spec_data)->fr = v3;
+				((SinInfoT *)tran_spec_data)->td = v4;
+				((SinInfoT *)tran_spec_data)->df = v5;
+				((SinInfoT *)tran_spec_data)->ph = v6;
+
+				break;
+			case TR_TYPE_PULSE:
+				tran_spec_data = (void *) malloc(sizeof(PulseInfoT));
+				if (tran_spec_data == NULL) {
+					printf("Error Memory allocation problems. Exiting..\n");
+					exit(EXIT_FAILURE);
+				}
+
+				((PulseInfoT *)tran_spec_data)->i1 = v1;
+				((PulseInfoT *)tran_spec_data)->i2 = v2;
+				((PulseInfoT *)tran_spec_data)->td = v3;
+				((PulseInfoT *)tran_spec_data)->tr = v4;
+				((PulseInfoT *)tran_spec_data)->tf = v5;
+				((PulseInfoT *)tran_spec_data)->pw = v6;
+				((PulseInfoT *)tran_spec_data)->per = v7;
+
+				break;
+			case TR_TYPE_PWL:
+				tran_spec_data = (void *) malloc(sizeof(PwlInfoT));
+				if (tran_spec_data == NULL) {
+					printf("Error Memory allocation problems. Exiting..\n");
+					exit(EXIT_FAILURE);
+				}
+
+				((PwlInfoT *)tran_spec_data)->times = times;
+				((PwlInfoT *)tran_spec_data)->values = values;
+				((PwlInfoT *)tran_spec_data)->total_tuples = total_tuples;
+
+				break;
+			default:
+				printf("Error. Unknown transient spec function. Exiting..\n");
+				exit(EXIT_FAILURE);
+		}
+
+
 
 		switch (toupper(type)) {
 			case 'I':
@@ -524,13 +1145,13 @@ void parse_cir(char *filename) {
 				// update components list (lists)
 				if (has_G2 == 0){
 					if (insert_element(&team1_list, (toupper(type)=='I'?I:(toupper(type)=='R'?R:C)), \
-										name, node1, node2, val) == -1) {
+										name, node1, node2, val, tr_type, tran_spec_data) == -1) {
 						printf("insert_element. Memory allocation problems. Exiting..\n");
 						exit(EXIT_FAILURE);
 					}
-				}else{
+				} else {
 					if (insert_element(&team2_list, (toupper(type)=='I'?I:(toupper(type)=='R'?R:C)), \
-										name, node1, node2, val) == -1) {
+										name, node1, node2, val, tr_type, tran_spec_data) == -1) {
 						printf("insert_element. Memory allocation problems. Exiting..\n");
 						exit(EXIT_FAILURE);
 					}
@@ -556,7 +1177,8 @@ void parse_cir(char *filename) {
 
 				// add component to node component list (hashtable field)
 				// update components list (lists)
-				if (insert_element(&team2_list, (toupper(type)=='V'?V:L), name, node1, node2, val) == -1) {
+				if (insert_element(&team2_list, (toupper(type)=='V'?V:L), name, node1, node2, val, \
+							       tr_type, tran_spec_data) == -1) {
 					printf("insert_element. Memory allocation problems. Exiting..\n");
 					exit(EXIT_FAILURE);
 				}

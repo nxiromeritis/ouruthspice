@@ -28,7 +28,7 @@ unsigned int command_list_len = 0;
 // NOTE4: DC commands that have not print or plot commands after them will be ignored DURING EXECUTION
 // NOTE5: Possible errors contained in command parameters will be unveiled during execution (interpreter logic)
 void add_command_to_list(char *command) {
-	static byte prev_command_is_dc = 0;
+	static byte prev_command_is_dc_or_tran = 0;
 	int strcmp_res;
 
 	char *token = NULL;
@@ -76,7 +76,18 @@ void add_command_to_list(char *command) {
 				// sparse matrixes
 				is_sparse = 1;
 			}
-			// else bypass argument (future arguments: ITER SPARSE)
+			else if (strncmp(token, "METHOD", 6) == 0) {
+				if (strcmp(&token[7], "TR") == 0) {	 // TODO. erase this as it is the default
+					tr_method = TRAPEZOIDAL;
+				}
+				else if (strcmp(&token[7], "BE") == 0) {
+					tr_method  = BACKWARD_EULER;
+				}
+				else {
+					printf(YEL "Warning:" NRM "Unknown transient analysis method. Bypassing\n");
+				}
+			}
+			// else bypass argument
 
 			token = strtok(NULL, delim);
 		}
@@ -84,10 +95,14 @@ void add_command_to_list(char *command) {
 	}
 
 
+	// check if the command if dc or tran
 	strcmp_res = strncmp(command, ".DC ", 4);
+	if (strcmp_res != 0) {
+		strcmp_res = strncmp(command, ".TRAN ", 6);
+	}
 
-	// if current command is .dc and the previous one is also dc..
-	if ( (strcmp_res == 0) && (prev_command_is_dc == 1) ) {
+	// if current command is .dc or .tran and the previous one is also .dc or .tran..
+	if ( (strcmp_res == 0) && (prev_command_is_dc_or_tran == 1) ) {
 
 		// the new dc command will overwrite the previous one
 		free(command_list[command_list_len-1]);
@@ -105,21 +120,22 @@ void add_command_to_list(char *command) {
 
 	// store the command
 
-	printf("\t\t\t\t\tcommand : %s\n",command);
+	/*printf("\t\t\t\t\tcommand : %s\n",command);*/
 	command_list[command_list_len-1] = strdup(command);
 	if (command_list[command_list_len-1] == NULL) {
 		printf("Error. Memory allocation problems. Exiting..\n");
 		exit(EXIT_FAILURE);
 	}
 
-	// update the .dc flag
-	/*prev_command_is_dc = !(strcmp_res); // correct but lacks readability*/
+	// update the .dc or .tran flag
+	/*prev_command_is_dc_or_tran = !(strcmp_res); // correct but lacks readability*/
 	if (strcmp_res == 0)
-		prev_command_is_dc = 1;
+		prev_command_is_dc_or_tran = 1;
 	else
-		prev_command_is_dc = 0;
+		prev_command_is_dc_or_tran = 0;
 
 }
+
 
 
 // prints the command list
@@ -164,13 +180,37 @@ void free_lists(){
 	unsigned long i;
 
 	for(i=0; i < team1_list.size; i++) {
-		free(team1_list.list[i].name);
+			free(team1_list.list[i].name);
+
+		// free possible transient spec pwl tuples
+		if (team1_list.list[i].tr_type == TR_TYPE_PWL) {
+			free(team1_list.list[i].tran_spec.pwl_data->times);
+			free(team1_list.list[i].tran_spec.pwl_data->values);
+		}
+
+		if (team1_list.list[i].tr_type != TR_TYPE_NONE) {
+			/*printf("TR_TYPE = %d\n", team1_list.list[i].tr_type);*/
+			// free exp data as tran spec is a union of pointers
+			free(team1_list.list[i].tran_spec.data);
+		}
 	}
 	free(team1_list.list);
 	team1_list.size = 0;
 
 	for(i=0; i < team2_list.size; i++) {
 		free(team2_list.list[i].name);
+
+		// free possible transient spec pwl tuples
+		if (team2_list.list[i].tr_type == TR_TYPE_PWL) {
+			free(team2_list.list[i].tran_spec.pwl_data->times);
+			free(team2_list.list[i].tran_spec.pwl_data->values);
+		}
+
+		if (team2_list.list[i].tr_type != TR_TYPE_NONE) {
+			/*printf("TR_TYPE = %d\n", team2_list.list[i].tr_type);*/
+			// free exp data as tran spec is a union of pointers
+			free(team2_list.list[i].tran_spec.data);
+		}
 	}
 	free(team2_list.list);
 	team2_list.size = 0;
@@ -184,7 +224,8 @@ void free_lists(){
 }
 
 // Insert an element into one of the two lists
-int insert_element(list_head *list, c_type type, char *name, element_h *node_plus, element_h *node_minus, double value){
+int insert_element(list_head *list, c_type type, char *name, element_h *node_plus, element_h *node_minus, double value, \
+				   int tr_type, void *tran_spec_data){
 	list_element *tmp;
 
 	tmp = realloc(list->list, ((list->size + 1) * sizeof(list_element)));
@@ -199,12 +240,17 @@ int insert_element(list_head *list, c_type type, char *name, element_h *node_plu
 		return -1;
 	strtoupper(list->list[list->size].name);
 
+
 	// nodes
 	list->list[list->size].node_plus = node_plus;
 	list->list[list->size].node_minus = node_minus;
 
 	list->list[list->size].op_point_val = value;
 	list->list[list->size].value = value;
+
+	// add transient spec information
+	list->list[list->size].tr_type = tr_type;
+	list->list[list->size].tran_spec.data = tran_spec_data;
 
 	list->size++;
 	printf("%lu\n", list->size);
@@ -302,6 +348,106 @@ int insert_mos(char *name, element_h *node_d, element_h *node_g, element_h *node
 
 	return 0;
 }
+
+
+
+// this function will iterate though the lists will create a unique file for gnuplot
+// for each component that has a transient spec (running up to 3s) (used only for debugging)
+void test_tran_spec() {
+	int i;
+	double j;
+	FILE *fp;
+	char tmp[64];
+	double (*get_func_ptr)(void *, double);
+
+	// iterate through lists
+	for (i = 0; i < team1_list.size; i++) {
+		fp = NULL;
+		get_func_ptr = NULL;
+		strcpy(tmp, "VElem");
+		strcat(tmp, team1_list.list[i].name);
+
+		switch (team1_list.list[i].tr_type) {
+			case TR_TYPE_NONE:
+				break;
+			case TR_TYPE_PWL:
+				strcat(tmp, "_TRAN_PWL_VALUES.out");
+				get_func_ptr = (double(*)(void *, double)) &get_pwl_val;
+				break;
+			case TR_TYPE_PULSE:
+				strcat(tmp, "_TRAN_PULSE_VALUES.out");
+				get_func_ptr = (double(*)(void *, double)) &get_pulse_val;
+				break;
+			case TR_TYPE_SIN:
+				strcat(tmp, "_TRAN_SIN_VALUES.out");
+				get_func_ptr = (double(*)(void *, double)) &get_sin_val;
+				break;
+			case TR_TYPE_EXP:
+				strcat(tmp, "_TRAN_EXP_VALUES.out");
+				get_func_ptr = (double(*)(void *, double)) &get_exp_val;
+				break;
+			default:
+				break;
+		}
+
+		if (team1_list.list[i].tr_type != TR_TYPE_NONE) {
+			fp = fopen(tmp, "w");
+			if (fp == NULL) {
+				perror("fopen");
+				exit(EXIT_FAILURE);
+			}
+
+			for (j = 0; j < 9.0 ;  j = j + 0.01) {
+				fprintf(fp, "%lf\t\t%lf\n", j, get_func_ptr(team1_list.list[i].tran_spec.data, j));
+			}
+			fclose(fp);
+		}
+	}
+
+	for (i = 0; i < team2_list.size; i++) {
+		fp = NULL;
+		get_func_ptr = NULL;
+		strcpy(tmp, "IElem");
+		strcat(tmp, team2_list.list[i].name);
+
+		switch (team2_list.list[i].tr_type) {
+			case TR_TYPE_NONE:
+				break;
+			case TR_TYPE_PWL:
+				strcat(tmp, "_TRAN_PWL_VALUES.out");
+				get_func_ptr = (double(*)(void *, double)) &get_pwl_val;
+				break;
+			case TR_TYPE_PULSE:
+				strcat(tmp, "_TRAN_PULSE_VALUES.out");
+				get_func_ptr = (double(*)(void *, double)) &get_pulse_val;
+				break;
+			case TR_TYPE_SIN:
+				strcat(tmp, "_TRAN_SIN_VALUES.out");
+				get_func_ptr = (double(*)(void *, double)) &get_sin_val;
+				break;
+			case TR_TYPE_EXP:
+				strcat(tmp, "_TRAN_EXP_VALUES.out");
+				get_func_ptr = (double(*)(void *, double)) &get_exp_val;
+				break;
+			default:
+				break;
+		}
+
+		if (team2_list.list[i].tr_type != TR_TYPE_NONE) {
+			fp = fopen(tmp, "w");
+			if (fp == NULL) {
+				perror("fopen");
+				exit(EXIT_FAILURE);
+			}
+
+			for (j = 0; j < 9.0 ; j = j + 0.01) {
+				fprintf(fp, "%lf\t\t%lf\n", j, get_func_ptr(team2_list.list[i].tran_spec.data, j));
+			}
+			fclose(fp);
+		}
+	}
+}
+
 
 // Print the elements of the team1_list
 void print_list1 (){

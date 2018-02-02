@@ -55,6 +55,7 @@ int main(int argc, char *argv[]) {
 						   ((solver_type == 3)?"bi_cg_solver":"unknown_solver")))));
 	printf("ITOL: %e\n", itol);
 	printf("%sSPARSE\n", is_sparse?"":"NOT ");
+	printf("TRANSIENT_METHOD: %s\n", (tr_method == TRAPEZOIDAL)?"TRAPEZOIDAL":"BACKWARD_EULER");
 
 
 
@@ -93,6 +94,9 @@ int main(int argc, char *argv[]) {
 	}
 
 
+	// this function call will generate a unique file for each component
+	// that has a transient spec for gnuplot plotting
+	test_tran_spec(); //debug
 
 	print_command_list();
 	execute_commands();

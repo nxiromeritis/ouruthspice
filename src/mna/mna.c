@@ -6,11 +6,11 @@
 #include <gsl/gsl_linalg.h>
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_blas.h>
+#include <math.h>
 
 #include "../cir_parser/cir_parser.h"
 #include "../spicy.h"
 #include "../hashtable/hashtable.h"
-#include "../lists/lists.h"
 #include "mna.h"
 
 // variables regarding the MNA system
@@ -42,6 +42,7 @@ double *p_vector = NULL;
 double *q_vector = NULL;
 
 byte solver_type = LU_SOLVER;
+byte tr_method = TRAPEZOIDAL;
 byte is_sparse = 0;
 
 double itol = ITOL_DEFAULT;
@@ -465,6 +466,144 @@ void Transpose_solve_q(){
 }
 
 
+// get the value of the exp transient function at time t
+double get_exp_val(ExpInfoT *data, double t) {
+	double res;
+
+	if (t < 0) {
+		printf("Transient Spec Function: Got negative time. Returning zero.\n");
+		res = 0.0;
+	}
+	else if (t < data->td1) {
+		res = data->i1;
+	}
+	else if (t < data->td2) {
+		res = data->i1 + (data->i2 - data->i1)*(1.0 - exp(-1*(t - data->td1)/data->tc1));
+	}
+	else {
+		res = data->i1 + (data->i2 - data->i1)*(exp(-1*(t- data->td2)/data->tc2) - exp(-1*(t - data->td1)/data->tc1));
+	}
+	return res;
+}
+
+
+// get the value of the sin tansient function at time t
+double get_sin_val(SinInfoT *data, double t) {
+	double res;
+
+	if (t < 0) {
+		printf("Transient Spec Function: Got negative time. Returning zero.\n");
+		res = 0.0;
+	}
+	else if (t < data->td) {
+		res = data->i1 + data->ia*sin(2*M_PI/360.0);
+	}
+	else {
+		res = data->i1 + data->ia * sin(2*M_PI * data->fr*(t - data->td) + 2*M_PI * data->ph/360.0)* \
+			  exp(-1*(t - data->td)*data->df);
+	}
+	return res;
+}
+
+
+// get the value of the pulse transient function at time t
+double get_pulse_val(PulseInfoT *data, double t) {
+	double res;
+	double y2, y1;
+	double x1;
+
+	// shift the time to take the corresponding value from the first period of the pulse
+	// (only when time is bigger than td)
+
+	if (t < 0) {
+		printf("Transient Spec Function: Got negative time. Returning zero.\n");
+		res = 0.0;
+	}
+	else if (t < data->td) {
+		res = data->i1;
+	}
+	else {
+		t = t - (int)((t-data->td)/data->per)*data->per;
+
+		if (t < data->td + data->tr) {
+			// i1->i2 linearly
+			/*x2 = data->td + data->tr;*/
+			x1 = data->td;
+			y2 = data->i2;
+			y1 = data->i1;
+			/*res = ((y2-y1)/(x2-x1)) * (t - x1) + y1;*/
+			res = ((y2 - y1)/data->tr)* (t - x1) + y1;
+		}
+		else if (t < data->td + data->tr + data->pw) {
+			res = data->i2;
+		}
+		else if (t < data->td + data->tr + data->pw + data->tf) {
+			// i2->i1 linearly
+			/*x2 = data->td + data->tr + data->pw + data->tf;*/
+			x1 = data->td + data->tr + data->pw;
+			y2 = data->i1;
+			y1 = data->i2;
+			res = ((y2 - y1)/data->tf) * (t - x1) + y1;
+		}
+		else {
+			res = data->i1;
+		}
+	}
+
+	return res;
+}
+
+
+
+// get the value of pwl transient function at time t
+double get_pwl_val(PwlInfoT *data, double t) {
+	double res;
+	double y2, y1;
+	double x2, x1;
+	int idx;
+
+	// negative time -> return zero
+	if (t < 0) {
+		printf("Transient Spec Function: Got negative time. Returning zero.\n");
+		res = 0.0;;
+	}
+
+	// only one tuple is equivalent to a line parallel to x axis (or a constant DC value)
+	if (data->total_tuples == 1)
+		return data->values[0];
+
+	// t is smaller than the first tuple time (return first value)
+	if (t < data->times[0])
+		return data->values[0];
+
+	// t is bigger that the last tuple time (return the last value)
+	if (t > data->times[data->total_tuples-1])
+		return data->values[data->total_tuples-1];
+
+
+	// find the very FIRST tuple with a time bigger than t
+	idx = 0;
+	while (1) {
+		idx++;
+		if (data->times[idx] > t)
+			break;
+	}
+
+	x2 = data->times[idx];
+	x1 = data->times[idx-1];
+	y2 = data->values[idx];
+	y1 = data->values[idx-1];
+	res = ((y2-y1)/(x2-x1))*(t - x1) + y1;
+
+	/*printf("%lf < %lf\n",t,  data->times[idx]);*/
+	/*printf("\t(x1,x2),(y1,y2)(res) = (%lf, %lf),(%lf, %lf)(%lf)\n", x1, x2, y1, y2,res);*/
+
+	return res;
+}
+
+
+
+
 // executes the command_list (command .OPTIONS is excluded from the list as it is executed during the parsing phase)
 void execute_commands() {
 	unsigned long i,k;
@@ -491,12 +630,17 @@ void execute_commands() {
 	//char tmp_name[128];
 
 
+	// this is a global variable that indicates the length list that contains
+	// the commands to be executed. Therefore in this case there are no commands
 	if (command_list_len == 0)
 		return;
+
 
 	for (i = 0; i < command_list_len; i++) {
 		if (strncmp(command_list[i], ".DC ", 4) == 0) {
 
+			// in this case variable var_name is aready allocated by a previous
+			// command and must be freed and re-initialised
 			if( var_name != NULL){
 
 				start = 0;
@@ -522,9 +666,9 @@ void execute_commands() {
 				printf(RED "Error" NRM ": Not enough arguments (%s)\n Bypassing..\n", command_list[i]);
 				continue;
 			}
+
 			// before storing var name check if it exist inside the list
 			var_found = 0;
-
 
 			if( toupper(token[0]) == 'I'){
 				for (k=0; k < team1_list.size; k++) {
@@ -559,6 +703,7 @@ void execute_commands() {
 				printf(RED "Error" NRM ": .DC variable not found\n Bypassing..\n");
 				continue;
 			}
+
 			var_name = strdup(token);
 			if (var_name == NULL) {
 				printf("Error. Memory allocation problems. Exiting..\n");
@@ -636,7 +781,11 @@ void execute_commands() {
 			// TODO: multiple nodes in one line of .print or .plot command
 			// Make the parser execute the options command and create a list of dc-print commands
 
-			if(var_found == 0 ){
+
+			// I or V was not found in the previous DC command  (TODO what should we do with TRAN?)
+			// TRANSIENT ANALYSIS?
+			if(var_found == 0 ) {
+				printf("Bypassing PLOT command. No DC command before or unknown DC source\n");
 				continue;
 			}
 
@@ -649,7 +798,7 @@ void execute_commands() {
 				continue;
 			}
 
-			// store node name
+			// check if the node is written correctly in command (syntax check)
 			token = strtok(NULL, delim);
 			printf("token: %s\n", token);
 			if (token == NULL) {
@@ -664,6 +813,8 @@ void execute_commands() {
 				var_name = NULL;
 				continue;
 			}
+
+			// checks were successsful. store node name into a variable
 			// +1 for '\0', -1 for 'v', -1 for '(' and -1 for ')'
 			node_name = malloc( (strlen(token) - 2)*sizeof(char));
 			if (node_name == NULL) {
@@ -671,6 +822,9 @@ void execute_commands() {
 				exit(EXIT_FAILURE);
 			}
 			snprintf(node_name, strlen(token)-2, "%s", &token[2]);
+
+
+			// search for the node in the hashtable
 			node = ht_get(node_name);
 			if (node == NULL) {
 				printf(RED "Error" NRM ": Node not found (%s)\n Bypassing\n", token);
@@ -682,15 +836,19 @@ void execute_commands() {
 			}
 
 			/***********/
+			// now that we have successfully located the node in the hash table and aquired
+			// its pointer we are rereading the name including the parantheses. This is used only for
+			// file name generation
 			node_name = realloc(node_name,(strlen(token)+1)*sizeof(char));
 			if (node_name == NULL) {
 				printf("Error. Memory allocation problems. Exiting..\n");
 				exit(EXIT_FAILURE);
 			}
 			snprintf(node_name, strlen(token)+1, "%s", &token[0]);
-			/*********/
+			/***********/
 
-			// there should be no more arguments
+
+			// there should be no more arguments (syntax check)
 			token = strtok(NULL, delim);
 			if (token != NULL) {
 				printf(RED "Error" NRM ": Command contains extra false arguments (%s)\n Bypassing\n", command_list[i]);
@@ -702,12 +860,15 @@ void execute_commands() {
 			}
 
 
-			// +9 -> strlen("_DC_") + strlen(".txt") + 1 // 1 for '\0'
+			// reminder: variable var_name is the I or V that changes value during the DC or TRAN analysis
+			// strlen(node_name) +9 = strlen(node_name) + strlen("_DC_") + strlen(".txt") + 1 for '\0'
 			filename = (char *) malloc((strlen(var_name) + strlen(node_name) + 9)*sizeof(char));
 			if (filename == NULL) {
 				printf("Error. Memory allocation problems. Exiting..\n");
 				exit(EXIT_FAILURE);
 			}
+
+			// TODO add TRAN instead of DC if we are plotting for TRAN analysis
 			sprintf(filename, "%s_DC_%s.txt", node_name, var_name);
 
 			node_fp = fopen(filename, "w");
@@ -717,8 +878,7 @@ void execute_commands() {
 			}
 
 
-			/*  Script for plots */
-
+			/* GNUPLOT script */
 			fp_draw = fopen("draw.sh", "a");
 
 			if (fp_draw == NULL) {
@@ -726,10 +886,13 @@ void execute_commands() {
 				exit(EXIT_FAILURE);
 			}
 
-			/***************/
 
+			// TODO handle transient (TRAN)  analysis after this point
+
+			// at this point it is guaranteed that var_found will be either 1 or 2
+			// var_found == 1 -> V variations
+			// var_found == 2 -> I variations
 			if (var_found == 1) {
-
 
 				for (j=start; j < end + 0.000000001; j = j + jump) {
 
@@ -853,7 +1016,6 @@ void execute_commands() {
 			node_name = NULL;
 			filename = NULL;
 		}
-
 	}
 
 	system("bash draw.sh");
