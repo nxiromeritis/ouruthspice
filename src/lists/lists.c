@@ -77,10 +77,12 @@ void add_command_to_list(char *command) {
 				is_sparse = 1;
 			}
 			else if (strncmp(token, "METHOD", 6) == 0) {
-				if (strcmp(&token[7], "TR") == 0) {	 // TODO. erase this as it is the default
-					tr_method = TRAPEZOIDAL;
-				}
-				else if (strcmp(&token[7], "BE") == 0) {
+				is_trans = 1;
+				// if (strcmp(&token[7], "TR") == 0) {	 // TODO. erase this as it is the default
+				// 	tr_method = TRAPEZOIDAL;
+				// }
+				// else if (strcmp(&token[7], "BE") == 0) {
+				if (strcmp(&token[7], "BE") == 0) {
 					tr_method  = BACKWARD_EULER;
 				}
 				else {

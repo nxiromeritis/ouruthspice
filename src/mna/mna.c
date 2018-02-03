@@ -19,6 +19,17 @@ double *mna_vector = NULL;
 double *default_mna_vector_copy = NULL;
 unsigned long mna_dimension_size = 0;
 
+// variable regarding the plot state
+int plot_type = DC_PLOT;
+
+// variables used for the complete MNA system
+double *G_array = NULL;
+double *C_array = NULL;
+
+// timeste and rnd time of transient analysys
+double timestep = 0.0;
+double end_time = 0.0;
+
 // variables used with sparse matrixes
 cs *triplet_A = NULL;
 cs *compr_col_A = NULL;
@@ -44,6 +55,7 @@ double *q_vector = NULL;
 byte solver_type = LU_SOLVER;
 byte tr_method = TRAPEZOIDAL;
 byte is_sparse = 0;
+byte is_trans = 0;
 
 double itol = ITOL_DEFAULT;
 
@@ -602,8 +614,6 @@ double get_pwl_val(PwlInfoT *data, double t) {
 }
 
 
-
-
 // executes the command_list (command .OPTIONS is excluded from the list as it is executed during the parsing phase)
 void execute_commands() {
 	unsigned long i,k;
@@ -771,13 +781,55 @@ void execute_commands() {
 				continue;
 			}
 
+			// the following plot commands will plot DC graphs
+			plot_type = DC_PLOT;
+
 			// the iteration values are set up
 			// the next plot command will solve the system
 			// and write the results to the file
 
 			// no need to free var_name here. it is needed during the plot command
 		}
-		if ((strncmp(command_list[i], ".PRINT ", 7) == 0) || (strncmp(command_list[i], ".PLOT ", 6) == 0)) {
+		if (strncmp(command_list[i], ".TRAN ", 6) == 0) {
+
+			// bypass command name
+			token = strtok(command_list[i], delim);
+			if (token == NULL) {
+				printf(RED "Error" NRM ": Not enough arguments (%s)\n Bypassing..\n", command_list[i]);
+				free(var_name);
+				var_name = NULL;
+				continue;
+			}
+
+			// time step
+			if (parse_double(&timestep, token) == 0) {
+				printf(RED "Error" NRM ": Invalid argument value (%s)\n Bypassing..\n", command_list[i]);
+				free(var_name);
+				var_name = NULL;
+				continue;
+			}
+
+			token = strtok(command_list[i], delim);
+			if (token == NULL) {
+				printf(RED "Error" NRM ": Not enough arguments (%s)\n Bypassing..\n", command_list[i]);
+				free(var_name);
+				var_name = NULL;
+				continue;
+			}
+
+			// end time
+			if (parse_double(&end_time, token) == 0) {
+				printf(RED "Error" NRM ": Invalid argument value (%s)\n Bypassing..\n", command_list[i]);
+				free(var_name);
+				var_name = NULL;
+				continue;
+			}
+
+			// the following plot commands will plot TRAN graphs
+			plot_type = TRAN_PLOT;
+		}
+		if ((plot_type == DC_PLOT) &&  
+			((strncmp(command_list[i], ".PRINT ", 7) == 0) || (strncmp(command_list[i], ".PLOT ", 6) == 0))) {
 			// TODO: multiple nodes in one line of .print or .plot command
 			// Make the parser execute the options command and create a list of dc-print commands
 
@@ -890,8 +942,8 @@ void execute_commands() {
 			// TODO handle transient (TRAN)  analysis after this point
 
 			// at this point it is guaranteed that var_found will be either 1 or 2
-			// var_found == 1 -> V variations
-			// var_found == 2 -> I variations
+			// var_found == 1 -> I variations
+			// var_found == 2 -> V variations
 			if (var_found == 1) {
 
 				for (j=start; j < end + 0.000000001; j = j + jump) {
@@ -1016,6 +1068,11 @@ void execute_commands() {
 			node_name = NULL;
 			filename = NULL;
 		}
+
+		if ((plot_type == TRAN_PLOT) &&  
+			((strncmp(command_list[i], ".PRINT ", 7) == 0) || (strncmp(command_list[i], ".PLOT ", 6) == 0))) {
+			
+		}
 	}
 
 	system("bash draw.sh");
@@ -1031,8 +1088,25 @@ void execute_commands() {
 
 }
 
+void create_trans_MNA_array() {
+	gsl_matrix_view gsl_mna = gsl_matrix_view_array(mna_array, mna_dimension_size, mna_dimension_size);
+	gsl_matrix_view gsl_G_array = gsl_matrix_view_array(G_array, mna_dimension_size, mna_dimension_size);
+	gsl_matrix_view gsl_C_array = gsl_matrix_view_array(C_array, mna_dimension_size, mna_dimension_size);
 
+	memset(mna_array, 0, (mna_dimension_size * mna_dimension_size * sizeof(double)));
+	gsl_matrix_add(&gsl_mna.matrix, &gsl_C_array.matrix);
+	if (tr_method == BACKWARD_EULER) {
+		gsl_matrix_scale (&gsl_mna.matrix, (1 / timestep));
+	} else { // tr_method ==TRAPEZOIDAL
+		gsl_matrix_scale (&gsl_mna.matrix, (2 / timestep));
+	}
 
+	gsl_matrix_add(&gsl_mna.matrix, &gsl_G_array.matrix);
+}
+
+void reset_MNA_array() {
+	memcpy(mna_array, G_array, (mna_dimension_size * mna_dimension_size * sizeof(double)));
+}
 
 void print_sparse_matrix(cs *A) {
 	int i;
@@ -1327,6 +1401,21 @@ void init_MNA_system() {
 		exit(EXIT_FAILURE);
 	}
 
+	if (is_trans) {
+		// G array dimensions: ((n-1) + m2)x((n-1) + m2)
+		G_array = (double *)calloc(mna_dimension_size * mna_dimension_size, sizeof(double));
+		if (G_array == NULL) {
+			printf("Error. Memory allocation problems. Exiting..\n");
+			exit(EXIT_FAILURE);
+		}
+
+		// C array dimensions: ((n-1) + m2)x((n-1) + m2)
+		C_array = (double *)calloc(mna_dimension_size * mna_dimension_size, sizeof(double));
+		if (C_array == NULL) {
+			printf("Error. Memory allocation problems. Exiting..\n");
+			exit(EXIT_FAILURE);
+		}
+	}
 
 }
 
@@ -1360,6 +1449,7 @@ void fill_MNA_system() {
 	unsigned long node_plus_idx;
 	unsigned long node_minus_idx;
 	double component_value;
+	void *dest;
 
 	// iterate through the Group1 List and initialise the MNA system
 	for (i=0; i < team1_list.size; i++) {
@@ -1413,7 +1503,29 @@ void fill_MNA_system() {
 					mna_vector[node_plus_idx] -= component_value;
 				}
 				break;
-			case C:		// ignored at DC analysis
+			case C:
+				// ignored at DC analysis
+				if (is_trans) {
+					if ( ((node_plus_idx + 1) == 0) && ((node_minus_idx + 1 != 0)) ) {
+						// C_array[<->][<->] -> +Ck
+						C_array[node_minus_idx * mna_dimension_size + node_minus_idx] += component_value;
+					} else if ( ((node_minus_idx + 1) == 0) && ((node_plus_idx + 1) != 0) ) {
+						// C_array[<+>][<+>] -> +Ck
+						C_array[node_plus_idx * mna_dimension_size + node_plus_idx] += component_value;
+					} else if ( ((node_plus_idx +1) != 0) && ((node_minus_idx + 1) != 0) ) {
+						// C_array[<+>][<+>] -> +Ck
+						C_array[node_plus_idx * mna_dimension_size + node_plus_idx] += component_value;
+
+						// C_array[<->][<->] -> +Ck
+						C_array[node_minus_idx * mna_dimension_size + node_minus_idx] += component_value;
+
+						// C_array[<+>][<->] -> -Ck
+						C_array[node_plus_idx * mna_dimension_size + node_minus_idx] -= component_value;
+
+						// C_array[<->][<+>] -> -Ck
+						C_array[node_minus_idx * mna_dimension_size + node_plus_idx] -= component_value;
+					}
+				}
 				break;
 			default:
 				printf("Unknown type (%d) in list1\n", team1_list.list[i].type);
@@ -1454,11 +1566,17 @@ void fill_MNA_system() {
 					// array[<+>][k] -> +1
 					mna_array[(node_plus_idx)*mna_dimension_size + (total_ids-1+i)] += 1;
 				}
+
+				if (is_trans) {
+					// C_array[k][k] -> Lk
+					C_array[(total_ids-1+i)*mna_dimension_size + (total_ids-1+i)] += component_value;
+				}
 				// vector[k] -> 0
 				// ... where k = (total_ids-1+i) = (n-1+i)
 				break;
 
 			// these cases are here because of the optional .spice I R C field G2
+			// described into Najm`s book: "CIRCUIT SIMULATION" 
 			// ...not yet implemented in our MNA
 			case I:
 			case R:
@@ -1468,6 +1586,14 @@ void fill_MNA_system() {
 				printf("Unknown type (%d) in list2\n", team2_list.list[i].type);
 				exit(EXIT_FAILURE);
 
+		}
+	}
+
+	if (is_trans) {
+		dest = memcpy(G_array, mna_array, ((mna_dimension_size * mna_dimension_size) * sizeof(double)));
+		if (dest != G_array) {
+			printf("Unable to copy MNA array to G array\n");
+			exit(EXIT_FAILURE);
 		}
 	}
 
@@ -1510,6 +1636,13 @@ void free_MNA_system() {
 
 	if (default_mna_vector_copy)
 		free(default_mna_vector_copy);
+
+	if (is_trans) {
+		free(G_array);
+		G_array = NULL;
+		free(C_array);
+		C_array = NULL;
+	}
 }
 
 

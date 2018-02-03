@@ -55,7 +55,9 @@ int main(int argc, char *argv[]) {
 						   ((solver_type == 3)?"bi_cg_solver":"unknown_solver")))));
 	printf("ITOL: %e\n", itol);
 	printf("%sSPARSE\n", is_sparse?"":"NOT ");
-	printf("TRANSIENT_METHOD: %s\n", (tr_method == TRAPEZOIDAL)?"TRAPEZOIDAL":"BACKWARD_EULER");
+	if (is_trans) {
+		printf("TRANSIENT_METHOD: %s\n", (tr_method == TRAPEZOIDAL)?"TRAPEZOIDAL":"BACKWARD_EULER");
+	}
 
 
 

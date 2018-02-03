@@ -11,26 +11,37 @@ extern double *mna_vector;
 extern double *default_mna_vector_copy;
 extern unsigned long mna_dimension_size;
 
+extern double *G_array;
+extern double *C_array;
+
 #define MAX(a, b) ((a)>(b)?(a):(b))
 #define MIN(a, b) ((a)<(b)?(a):(b))
 
 #define MIN_ITER		100
 #define MAX_ITER		100
 #define ITOL_DEFAULT	10e-6
-#define EPS_DEFAULT 	10e-16
+#define EPS_DEFAULT		10e-16
 #define LU_SOLVER		0
 #define CHOL_SOLVER		1
 #define CG_SOLVER		2
 #define BI_CG_SOLVER	3
-
 #define TRAPEZOIDAL		0
 #define BACKWARD_EULER	1
+#define DC_PLOT			0
+#define TRAN_PLOT		1
+#define AC_PLOT			2 // TODO
 
 extern double itol;
 
 extern byte solver_type;
-extern byte is_sparse;
 extern byte tr_method;
+extern byte is_sparse;
+extern byte is_trans;
+
+extern int plot_type;
+
+extern double timestep;
+extern double end_time;
 
 extern cs *triplet_A;
 extern cs *compr_col_A;
@@ -81,11 +92,12 @@ extern void solve_BI_CG_iter_method();
 extern void Transpose_solve_precond();
 extern void Transpose_solve_q();
 
-
-// functions for transient spec
 extern double get_exp_val(ExpInfoT *data, double t);
 extern double get_sin_val(SinInfoT *data, double t);
 extern double get_pulse_val(PulseInfoT *data, double t);
 extern double get_pwl_val(PwlInfoT *data, double t);
+
+void create_trans_MNA_array();
+void reset_MNA_array();
 
 #endif
