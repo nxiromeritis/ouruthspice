@@ -20,6 +20,7 @@ double *default_mna_vector_copy = NULL;
 unsigned long mna_dimension_size = 0;
 
 // variable regarding the plot state
+int prev_plot_type = DC_PLOT;
 int plot_type = DC_PLOT;
 
 // variables used for the complete MNA system
@@ -28,6 +29,7 @@ double *C_array = NULL;
 
 // timeste and rnd time of transient analysys
 double timestep = 0.0;
+double prev_timestep = 0.0;
 double end_time = 0.0;
 
 // variables used with sparse matrixes
@@ -36,7 +38,18 @@ cs *compr_col_A = NULL;
 css *css_S = NULL;
 csn *csn_N = NULL;
 
+// variables used for Trans
+double *B_vector = NULL;
+double *old_mna_vector = NULL;
+double factor = 0;
+
 gsl_matrix_view gsl_mna_array;
+gsl_matrix_view gsl_G_array;
+gsl_matrix_view gsl_C_array;
+gsl_vector *default_X_vector_copy = NULL;
+gsl_vector *gsl_old_x_vector = NULL;
+
+
 gsl_vector_view gsl_mna_vector;
 gsl_vector *gsl_M_array = NULL;
 gsl_vector *gsl_x_vector = NULL;
@@ -69,14 +82,15 @@ void decomp_lu() {
 		compr_col_A = NULL;
 	}
 	else {
-		gsl_x_vector = gsl_vector_alloc(mna_dimension_size);
 
+		//gsl_x_vector = gsl_vector_alloc(mna_dimension_size);
 		gsl_mna_array = gsl_matrix_view_array(mna_array, mna_dimension_size, mna_dimension_size);
 		gsl_mna_vector = gsl_vector_view_array(mna_vector, mna_dimension_size);
-		gsl_p = gsl_permutation_alloc(mna_dimension_size);
+		//gsl_p = gsl_permutation_alloc(mna_dimension_size);
 
 		// user's responsibility is this fails
 		gsl_linalg_LU_decomp(&gsl_mna_array.matrix, gsl_p, &s);
+
 	}
 
 }
@@ -90,7 +104,7 @@ void decomp_cholesky() {
 		compr_col_A = NULL;
 	}
 	else {
-		gsl_x_vector = gsl_vector_alloc(mna_dimension_size);
+		// gsl_x_vector = gsl_vector_alloc(mna_dimension_size);
 
 		gsl_mna_array = gsl_matrix_view_array(mna_array, mna_dimension_size, mna_dimension_size);
 		gsl_mna_vector = gsl_vector_view_array(mna_vector, mna_dimension_size);
@@ -146,11 +160,12 @@ void initialise_iter_methods() {
 		gsl_mna_array = gsl_matrix_view_array(mna_array, mna_dimension_size, mna_dimension_size);
 		gsl_mna_vector = gsl_vector_view_array(mna_vector, mna_dimension_size);
 
+		// TODO move to different function
 		gsl_M_array = gsl_vector_alloc(mna_dimension_size);
+
 		gsl_vector_set_all(gsl_M_array,1);
 		for (i = 0; i < mna_dimension_size; i++){
 
-			// TODO add if is_sparse
 			if(  mna_array[(i * mna_dimension_size) + i] != 0 )
 				gsl_vector_set(gsl_M_array,i,mna_array[(i * mna_dimension_size) + i]);
 
@@ -160,14 +175,12 @@ void initialise_iter_methods() {
 		}
 	}
 
-
-	gsl_x_vector = gsl_vector_calloc(mna_dimension_size);
 	gsl_z_vector = gsl_vector_calloc(mna_dimension_size);
 	gsl_r_vector = gsl_vector_calloc(mna_dimension_size);
 	gsl_p_vector = gsl_vector_calloc(mna_dimension_size);
 	gsl_q_vector = gsl_vector_calloc(mna_dimension_size);
 
-	if(solver_type == BI_CG_SOLVER){
+	if(solver_type == BI_CG_SOLVER) {
 		gsl_zT_vector = gsl_vector_calloc(mna_dimension_size);
 		gsl_rT_vector = gsl_vector_calloc(mna_dimension_size);
 		gsl_pT_vector = gsl_vector_calloc(mna_dimension_size);
@@ -616,7 +629,7 @@ double get_pwl_val(PwlInfoT *data, double t) {
 
 // executes the command_list (command .OPTIONS is excluded from the list as it is executed during the parsing phase)
 void execute_commands() {
-	unsigned long i,k;
+	unsigned long i,k,l;
 	const char delim[5] = " \r\t\n";
 	char *token = NULL;
 
@@ -636,8 +649,11 @@ void execute_commands() {
 	unsigned long idx2;
 	list_element *var = NULL;
 
-	// TODO -> do with malloc
 	//char tmp_name[128];
+
+	// variables for transient analysis
+	double trans_value;
+	double (*get_func_ptr)(void *, double);
 
 
 	// this is a global variable that indicates the length list that contains
@@ -782,6 +798,7 @@ void execute_commands() {
 			}
 
 			// the following plot commands will plot DC graphs
+			prev_plot_type = plot_type;
 			plot_type = DC_PLOT;
 
 			// the iteration values are set up
@@ -790,52 +807,11 @@ void execute_commands() {
 
 			// no need to free var_name here. it is needed during the plot command
 		}
-		if (strncmp(command_list[i], ".TRAN ", 6) == 0) {
-
-			// bypass command name
-			token = strtok(command_list[i], delim);
-			if (token == NULL) {
-				printf(RED "Error" NRM ": Not enough arguments (%s)\n Bypassing..\n", command_list[i]);
-				free(var_name);
-				var_name = NULL;
-				continue;
-			}
-
-			// time step
-			if (parse_double(&timestep, token) == 0) {
-				printf(RED "Error" NRM ": Invalid argument value (%s)\n Bypassing..\n", command_list[i]);
-				free(var_name);
-				var_name = NULL;
-				continue;
-			}
-
-			token = strtok(command_list[i], delim);
-			if (token == NULL) {
-				printf(RED "Error" NRM ": Not enough arguments (%s)\n Bypassing..\n", command_list[i]);
-				free(var_name);
-				var_name = NULL;
-				continue;
-			}
-
-			// end time
-			if (parse_double(&end_time, token) == 0) {
-				printf(RED "Error" NRM ": Invalid argument value (%s)\n Bypassing..\n", command_list[i]);
-				free(var_name);
-				var_name = NULL;
-				continue;
-			}
-
-			// the following plot commands will plot TRAN graphs
-			plot_type = TRAN_PLOT;
-		}
-		if ((plot_type == DC_PLOT) &&  
+		if ((plot_type == DC_PLOT) &&
 			((strncmp(command_list[i], ".PRINT ", 7) == 0) || (strncmp(command_list[i], ".PLOT ", 6) == 0))) {
-			// TODO: multiple nodes in one line of .print or .plot command
-			// Make the parser execute the options command and create a list of dc-print commands
 
 
-			// I or V was not found in the previous DC command  (TODO what should we do with TRAN?)
-			// TRANSIENT ANALYSIS?
+			// I or V was not found in the previous DC command
 			if(var_found == 0 ) {
 				printf("Bypassing PLOT command. No DC command before or unknown DC source\n");
 				continue;
@@ -920,7 +896,6 @@ void execute_commands() {
 				exit(EXIT_FAILURE);
 			}
 
-			// TODO add TRAN instead of DC if we are plotting for TRAN analysis
 			sprintf(filename, "%s_DC_%s.txt", node_name, var_name);
 
 			node_fp = fopen(filename, "w");
@@ -939,7 +914,37 @@ void execute_commands() {
 			}
 
 
-			// TODO handle transient (TRAN)  analysis after this point
+			// Important:compare plot type with previous plot type and decide to decompose or not
+			if (plot_type != prev_plot_type) {
+				// it is guaranteed that at this point is_trans is set to 1
+				reset_MNA_array();
+
+				// free everything first as the decomposition and initialisation allocations
+				// will be performed again
+
+				// perform decomposition
+				switch(solver_type) {
+					case LU_SOLVER:
+						//gsl_permutation_free(gsl_p);
+						//gsl_vector_free(gsl_x_vector);
+						decomp_lu();
+						break;
+					case CHOL_SOLVER:
+						//gsl_vector_free(gsl_x_vector);
+						decomp_cholesky();
+						break;
+					// iterative solving method. No need to decompose
+					case CG_SOLVER:
+					case BI_CG_SOLVER:
+						free_gsl_vectors();
+						initialise_iter_methods();
+						break;
+					default:
+						printf(RED "Error uknown solver type specified..\n" NRM);
+						exit(EXIT_FAILURE);
+				}
+			}
+
 
 			// at this point it is guaranteed that var_found will be either 1 or 2
 			// var_found == 1 -> I variations
@@ -1068,13 +1073,378 @@ void execute_commands() {
 			node_name = NULL;
 			filename = NULL;
 		}
+		if (strncmp(command_list[i], ".TRAN ", 6) == 0) {
 
-		if ((plot_type == TRAN_PLOT) &&  
+			// bypass command name
+			token = strtok(command_list[i], delim);
+			if (token == NULL) {
+				printf(RED "Error" NRM ": Not enough arguments (%s)\n Bypassing..\n", command_list[i]);
+				continue;
+			}
+
+			// time step
+			token = strtok(NULL, delim);
+			if (token == NULL) {
+				printf(RED "Error" NRM ": Not enough arguments (%s)\n Bypassing..\n", command_list[i]);
+				continue;
+			}
+
+			prev_timestep = timestep;
+			if (parse_double(&timestep, token) == 0) {
+				printf(RED "Error" NRM ": Invalid argument value (%s)\n Bypassing..\n", command_list[i]);
+				continue;
+			}
+
+
+			token = strtok(NULL, delim);
+			if (token == NULL) {
+				printf(RED "Error" NRM ": Not enough arguments (%s)\n Bypassing..\n", command_list[i]);
+				continue;
+			}
+
+			// end time
+			if (parse_double(&end_time, token) == 0) {
+				printf(RED "Error" NRM ": Invalid argument value (%s)\n Bypassing..\n", command_list[i]);
+				continue;
+			}
+
+			// the following plot commands will plot TRAN graphs
+			prev_plot_type = plot_type;
+			plot_type = TRAN_PLOT;
+
+			/*printf("\nTRAN command: timestep = %lf, end_time = %lf\n", timestep, end_time);*/
+		}
+		if ((plot_type == TRAN_PLOT) &&
 			((strncmp(command_list[i], ".PRINT ", 7) == 0) || (strncmp(command_list[i], ".PLOT ", 6) == 0))) {
-			
+
+
+			// bypass command name
+			token = strtok(command_list[i], delim);
+			if (token == NULL) {
+				printf(RED "Error" NRM ": Not enough arguments (%s)\n Bypassing..\n", command_list[i]);
+				continue;
+			}
+
+			// check if the node is written correctly in command (syntax check)
+			token = strtok(NULL, delim);
+			printf("token: %s\n", token);
+			if (token == NULL) {
+				printf(RED "Error" NRM ": Not enough arguments (%s)\n Bypassing..\n", command_list[i]);
+				continue;
+			}
+			if ((toupper(token[0]) != 'V') || (token[1] != '(') || (token[strlen(token)-1] != ')') ) {
+				printf(RED "Error" NRM ": Invalid argument value (%s)\n Bypassing..\n", token);
+				continue;
+			}
+
+			// checks were successsful. store node name into a variable
+			// +1 for '\0', -1 for 'v', -1 for '(' and -1 for ')'
+			node_name = malloc( (strlen(token) - 2)*sizeof(char));
+			if (node_name == NULL) {
+				printf("Error. Memory allocation problems. Exiting..\n");
+				exit(EXIT_FAILURE);
+			}
+			snprintf(node_name, strlen(token)-2, "%s", &token[2]);
+
+
+			// search for the node in the hashtable
+			node = ht_get(node_name);
+			if (node == NULL) {
+				printf(RED "Error" NRM ": Node not found (%s)\n Bypassing\n", token);
+				node_name = NULL;
+				continue;
+			}
+
+			//*********
+			// now that we have successfully located the node in the hash table and aquired
+			// its pointer we are rereading the name including the parantheses. This is used only for
+			// file name generation
+			node_name = realloc(node_name,(strlen(token)+1)*sizeof(char));
+			if (node_name == NULL) {
+				printf("Error. Memory allocation problems. Exiting..\n");
+				exit(EXIT_FAILURE);
+			}
+			snprintf(node_name, strlen(token)+1, "%s", &token[0]);
+			//*********
+
+
+			// there should be no more arguments (syntax check)
+			token = strtok(NULL, delim);
+			if (token != NULL) {
+				printf(RED "Error" NRM ": Command contains extra false arguments (%s)\n Bypassing\n", command_list[i]);
+				free(node_name);
+				node_name = NULL;
+				continue;
+			}
+
+			// reminder: variable var_name is the I or V that changes value during the DC or TRAN analysis
+			// strlen(node_name) + 10 = strlen(node_name) + strlen("_TRAN") + strlen(".txt") + 1 for '\0'
+			filename = (char *) malloc((strlen(node_name) + 10)*sizeof(char));
+			if (filename == NULL) {
+				printf("Error. Memory allocation problems. Exiting..\n");
+				exit(EXIT_FAILURE);
+			}
+
+			sprintf(filename, "%s_TRAN.txt", node_name);
+
+			node_fp = fopen(filename, "w");
+			if (node_fp == NULL) {
+				perror("fopen");
+				exit(EXIT_FAILURE);
+			}
+
+			// GNUPLOT script
+			fp_draw = fopen("draw.sh", "a");
+
+			if (fp_draw == NULL) {
+				perror("fopen");
+				exit(EXIT_FAILURE);
+			}
+
+
+
+			if ((plot_type != prev_plot_type) || (prev_timestep != timestep)) {
+				// it is guaranteed that at this point is_trans is set to 1
+
+
+				//memcpy(G_array, mna_array, ((mna_dimension_size * mna_dimension_size) * sizeof(double)));
+				create_trans_MNA_array();
+				printf("G Array\n\n");
+				print_G_array();
+				printf("C Array\n\n");
+				print_C_array();
+				printf(" G_array + (factor * C Array)\n\n");
+				print_MNA_array();
+				// free everything first as the decomposition and initialisation allocations
+				// will be performed again
+
+				// perform decomposition
+				switch(solver_type) {
+					case LU_SOLVER:
+						//gsl_permutation_free(gsl_p);
+						//gsl_vector_free(gsl_x_vector);
+						decomp_lu();
+						break;
+					case CHOL_SOLVER:
+						//gsl_vector_free(gsl_x_vector);
+						decomp_cholesky();
+						break;
+					// iterative solving method. No need to decompose
+					case CG_SOLVER:
+					case BI_CG_SOLVER:
+						free_gsl_vectors();
+						initialise_iter_methods();
+						break;
+					default:
+						printf(RED "Error uknown solver type specified..\n" NRM);
+						exit(EXIT_FAILURE);
+				}
+			}
+
+			gsl_old_x_vector = gsl_vector_alloc(mna_dimension_size);
+			old_mna_vector = (double *)malloc(mna_dimension_size*sizeof(double));
+			B_vector = (double *)calloc(mna_dimension_size,sizeof(double));
+			gsl_vector_memcpy(gsl_old_x_vector,gsl_x_vector);
+
+
+			double *copy_mna_vector = (double *)calloc(mna_dimension_size,sizeof(double));
+
+
+			memcpy(old_mna_vector,default_mna_vector_copy,mna_dimension_size*sizeof(double));
+
+			for (j=0; j < end_time + 0.00000001; j = j + timestep) {
+				for(k = 0; k < Trans_list.size; k++){
+
+					switch (Trans_list.list[k]->tr_type) {
+						case TR_TYPE_PWL:
+							get_func_ptr = (double(*)(void *, double)) &get_pwl_val;
+							break;
+						case TR_TYPE_PULSE:
+							get_func_ptr = (double(*)(void *, double)) &get_pulse_val;
+							break;
+						case TR_TYPE_SIN:
+							get_func_ptr = (double(*)(void *, double)) &get_sin_val;
+							break;
+						case TR_TYPE_EXP:
+							get_func_ptr = (double(*)(void *, double)) &get_exp_val;
+							break;
+						default:
+							break;
+
+					}
+
+					trans_value = get_func_ptr(Trans_list.list[k]->tran_spec.data, j);
+					//printf("trans value %lf\n",trans_value);
+
+
+					switch (Trans_list.list[k]->type) {
+						case I:
+							var = Trans_list.list[k];
+							idx1 = var->node_plus->id - 1;
+							idx2 = var->node_minus->id -1;
+
+
+							if ( (is_sparse) && ((solver_type == 0)||( solver_type ==1)) ) {
+								// restore default b vector values
+								memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
+								if( (idx1+1) != 0 ) {
+									mna_vector[idx1] += var->op_point_val;
+									mna_vector[idx1] -= trans_value; // add new value to b vector
+								}
+								if( (idx2+1) != 0 ) {
+									mna_vector[idx2] -= var->op_point_val;
+									mna_vector[idx2] += trans_value; // add new value to b vector
+								}
+							}
+							else {
+								if( (idx1+1) != 0 ){
+									mna_vector[idx1] += var->value;	// eliminate old value from b vector
+									mna_vector[idx1] -= trans_value; // add new value to b vector
+								}
+								if( (idx2+1) != 0 ){
+									mna_vector[idx2] -= var->value;	 // eliminate old value from b vector
+									mna_vector[idx2] += trans_value; // add new value to b vector
+								}
+							}
+
+
+
+							var->value = trans_value;
+
+							// TODO TODO
+							// solve here and print to file
+
+
+						break;
+						case V:
+							/*mna_vector[Trans_list.list.k[k]	*/
+							var = Trans_list.list[k];
+							idx1 = Trans_list.k[k] + total_ids - 1;
+
+
+							//memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
+
+
+							mna_vector[idx1] = trans_value;
+							var->value = trans_value;
+
+
+							break;
+						default:
+							break;
+					}
+
+
+				}
+
+
+				//printf("%lf gsl_old_x_vector %lf\n",j,gsl_vector_get(gsl_old_x_vector,0));
+				/*
+				for(int p = 0 ; p< mna_dimension_size;p++){
+					printf("%lf mna_vector %lf\n",j,mna_vector[p]);
+				}
+				printf("\n");
+
+				for(int p = 0 ; p< mna_dimension_size;p++){
+					printf("before %lf gsl_x_vector %lf\n",j,gsl_vector_get(gsl_x_vector,p));
+				}
+				printf("\n");
+				*/
+
+
+
+				memset(B_vector,0,mna_dimension_size*sizeof(double));
+				if(tr_method == BACKWARD_EULER) {
+
+					for(k=0; k < mna_dimension_size; k++){
+
+						for(l=0; l < mna_dimension_size; l++){
+							B_vector[k] = B_vector[k] + C_array[mna_dimension_size*k + l]*gsl_vector_get(gsl_old_x_vector,l);
+						}
+						B_vector[k] = mna_vector[k] + (1/timestep)* B_vector[k];
+					}
+					gsl_vector_memcpy(gsl_old_x_vector,gsl_x_vector);
+
+				} else {
+
+					for(k=0; k < mna_dimension_size; k++) {
+
+						for(l=0; l < mna_dimension_size; l++) {
+							B_vector[k] = B_vector[k] + (G_array[mna_dimension_size*k + l] \
+								- (2/timestep)*C_array[mna_dimension_size*k + l])*gsl_vector_get(gsl_old_x_vector,l);
+						}
+
+						B_vector[k] = mna_vector[k] + old_mna_vector[k] - B_vector[k];
+					}
+
+
+					gsl_vector_memcpy(gsl_old_x_vector,gsl_x_vector);
+					memcpy(old_mna_vector,mna_vector,mna_dimension_size*sizeof(double));
+
+
+				}
+
+
+				memcpy(copy_mna_vector,mna_vector,mna_dimension_size*sizeof(double));
+				memcpy(mna_vector,B_vector,mna_dimension_size*sizeof(double));
+
+
+				switch(solver_type) {
+					case LU_SOLVER:
+						solve_lu();
+						break;
+					case CHOL_SOLVER:
+						solve_cholesky();
+						break;
+					case CG_SOLVER:
+						solve_CG_iter_method();
+						break;
+					case BI_CG_SOLVER:
+						solve_BI_CG_iter_method();
+						break;
+					default:
+						break;
+				}
+
+				memcpy(mna_vector,copy_mna_vector,mna_dimension_size*sizeof(double));
+
+				fprintf(node_fp, "%lf\t\t%e\n", j, node->val);
+
+				/*
+				for(int p = 0 ; p< mna_dimension_size;p++){
+					printf("after %lf gsl_x_vector %lf\n",j,gsl_vector_get(gsl_x_vector,p));
+				}
+				printf("\n");*/
+
+			}
+
+			gsl_vector_memcpy(gsl_x_vector,default_X_vector_copy);
+			memcpy(mna_vector,default_mna_vector_copy,mna_dimension_size*sizeof(double));
+
+			gsl_vector_free(gsl_old_x_vector);
+			free(old_mna_vector);
+			free(B_vector);
+
+			//Draw plot
+
+			fprintf(fp_draw, "gnuplot -e \"set terminal png size 1024, 1024;");
+			fprintf(fp_draw, "set output \\\"%s_TRANS.png\\\";",node_name);
+			fprintf(fp_draw, "plot \\\"%s\\\" using 1:2 with linespoints;\"\n", filename);
+			// redirect sterr to stdout and redirect stdout to /dev/null to avoid viewing xdg-open warnings
+			fprintf(fp_draw, "xdg-open \"%s_TRANS.png\" > /dev/null 2>&1\n",node_name);
+
+
+			fclose(node_fp);
+			fclose(fp_draw);
+			free(filename);
+			free(node_name);
+			free(copy_mna_vector);
+
+
 		}
 	}
 
+	// TODO what's up with these?
 	system("bash draw.sh");
 
 	if(var_name != NULL){
@@ -1085,28 +1455,39 @@ void execute_commands() {
 		free(var_name);
 		var_name = NULL;
 	}
-
 }
 
-void create_trans_MNA_array() {
-	gsl_matrix_view gsl_mna = gsl_matrix_view_array(mna_array, mna_dimension_size, mna_dimension_size);
-	gsl_matrix_view gsl_G_array = gsl_matrix_view_array(G_array, mna_dimension_size, mna_dimension_size);
-	gsl_matrix_view gsl_C_array = gsl_matrix_view_array(C_array, mna_dimension_size, mna_dimension_size);
 
-	memset(mna_array, 0, (mna_dimension_size * mna_dimension_size * sizeof(double)));
-	gsl_matrix_add(&gsl_mna.matrix, &gsl_C_array.matrix);
-	if (tr_method == BACKWARD_EULER) {
-		gsl_matrix_scale (&gsl_mna.matrix, (1 / timestep));
-	} else { // tr_method ==TRAPEZOIDAL
-		gsl_matrix_scale (&gsl_mna.matrix, (2 / timestep));
+
+// TODO if is sparse then...
+void create_trans_MNA_array() {
+	unsigned long i, j;
+
+
+
+	if (tr_method == BACKWARD_EULER){
+
+		factor = 1/timestep;
+	}
+	else{
+
+		factor = 2/timestep;
 	}
 
-	gsl_matrix_add(&gsl_mna.matrix, &gsl_G_array.matrix);
+	for (i=0; i < mna_dimension_size; i++) {
+		for (j=0; j < mna_dimension_size; j++) {
+			mna_array[i*mna_dimension_size + j] = G_array[i*mna_dimension_size +j]
+												+ factor * C_array[i*mna_dimension_size + j];
+		}
+	}
+
 }
+
 
 void reset_MNA_array() {
 	memcpy(mna_array, G_array, (mna_dimension_size * mna_dimension_size * sizeof(double)));
 }
+
 
 void print_sparse_matrix(cs *A) {
 	int i;
@@ -1313,7 +1694,7 @@ void init_triplet() {
 				// NOTE: NO BREAK HERE!!!!!
 				// it is intended to enter the case L code
 			case L:
-				// TODO no need to increment as the ith entry is accessed only be one component
+				// TODO no need to increment as the ith entry is accessed only by one component
 				if ((node_minus_idx + 1) != 0){
 					nz += 2;
 
@@ -1416,7 +1797,6 @@ void init_MNA_system() {
 			exit(EXIT_FAILURE);
 		}
 	}
-
 }
 
 
@@ -1449,14 +1829,13 @@ void fill_MNA_system() {
 	unsigned long node_plus_idx;
 	unsigned long node_minus_idx;
 	double component_value;
-	void *dest;
+	/*void *dest;*/
 
 	// iterate through the Group1 List and initialise the MNA system
 	for (i=0; i < team1_list.size; i++) {
 
 
-		// TODO TODO TODO NOW
-		// handle GROUNDING.. node_minus_idx causes undeflow... add if statements to bypass GND
+		// Note: GND handling.. node_minus_idx causes undeflow... added if statements to bypass GND
 
 
 		node_plus_idx = team1_list.list[i].node_plus->id - 1;
@@ -1567,7 +1946,7 @@ void fill_MNA_system() {
 					mna_array[(node_plus_idx)*mna_dimension_size + (total_ids-1+i)] += 1;
 				}
 
-				if (is_trans) {
+				if (is_trans && (team2_list.list[i].type == L)) {
 					// C_array[k][k] -> Lk
 					C_array[(total_ids-1+i)*mna_dimension_size + (total_ids-1+i)] += component_value;
 				}
@@ -1576,7 +1955,7 @@ void fill_MNA_system() {
 				break;
 
 			// these cases are here because of the optional .spice I R C field G2
-			// described into Najm`s book: "CIRCUIT SIMULATION" 
+			// described into Najm`s book: "CIRCUIT SIMULATION"
 			// ...not yet implemented in our MNA
 			case I:
 			case R:
@@ -1589,12 +1968,10 @@ void fill_MNA_system() {
 		}
 	}
 
+	// MOVED INTO execute_commands function
 	if (is_trans) {
-		dest = memcpy(G_array, mna_array, ((mna_dimension_size * mna_dimension_size) * sizeof(double)));
-		if (dest != G_array) {
-			printf("Unable to copy MNA array to G array\n");
-			exit(EXIT_FAILURE);
-		}
+		 memcpy(G_array, mna_array, ((mna_dimension_size * mna_dimension_size) * sizeof(double)));
+
 	}
 
 }
@@ -1604,8 +1981,6 @@ void free_gsl_vectors(){
 
 	gsl_vector_free(gsl_M_array);
 	gsl_M_array = NULL;
-	gsl_vector_free(gsl_x_vector);
-	gsl_x_vector = NULL;
 	gsl_vector_free(gsl_z_vector);
 	gsl_z_vector = NULL;
 	gsl_vector_free(gsl_r_vector);
@@ -1634,8 +2009,8 @@ void free_MNA_system() {
 	free(mna_vector);
 	mna_vector = NULL;
 
-	if (default_mna_vector_copy)
-		free(default_mna_vector_copy);
+	//if (default_mna_vector_copy)
+		//free(default_mna_vector_copy);
 
 	if (is_trans) {
 		free(G_array);
@@ -1683,6 +2058,64 @@ void print_MNA_array(){
 			}
 			for (j = (total_ids - 1); j < mna_dimension_size; j++){
 				printf(YEL "%.2lf " NRM, mna_array[(i * mna_dimension_size) + j]);
+			}
+			putchar('\n');
+		}
+	}
+
+	printf("\n\n");
+}
+
+void print_C_array(){
+	unsigned long i, j;
+
+	printf(" factor : %lf\n",factor);
+
+	printf("\n\n");
+	for (i = 0; i < mna_dimension_size; i++){
+		if (i < (total_ids - 1)){
+			for (j = 0; j < (total_ids -1); j++){
+				printf(RED "%.2lf " NRM, C_array[(i * mna_dimension_size) + j]);
+			}
+
+			for (j = (total_ids - 1); j < mna_dimension_size; j++){
+				printf(GRN "%.2lf " NRM, C_array[(i * mna_dimension_size) + j]);
+			}
+			putchar('\n');
+		}else{
+			for (j = 0; j < (total_ids -1); j++){
+				printf(GRN "%.2lf " NRM, C_array[(i * mna_dimension_size) + j]);
+			}
+			for (j = (total_ids - 1); j < mna_dimension_size; j++){
+				printf(YEL "%.2lf " NRM, C_array[(i * mna_dimension_size) + j]);
+			}
+			putchar('\n');
+		}
+	}
+
+	printf("\n\n");
+}
+
+void print_G_array(){
+	unsigned long i, j;
+
+	printf("\n\n");
+	for (i = 0; i < mna_dimension_size; i++){
+		if (i < (total_ids - 1)){
+			for (j = 0; j < (total_ids -1); j++){
+				printf(RED "%.2lf " NRM, G_array[(i * mna_dimension_size) + j]);
+			}
+
+			for (j = (total_ids - 1); j < mna_dimension_size; j++){
+				printf(GRN "%.2lf " NRM, G_array[(i * mna_dimension_size) + j]);
+			}
+			putchar('\n');
+		}else{
+			for (j = 0; j < (total_ids -1); j++){
+				printf(GRN "%.2lf " NRM, G_array[(i * mna_dimension_size) + j]);
+			}
+			for (j = (total_ids - 1); j < mna_dimension_size; j++){
+				printf(YEL "%.2lf " NRM, G_array[(i * mna_dimension_size) + j]);
 			}
 			putchar('\n');
 		}

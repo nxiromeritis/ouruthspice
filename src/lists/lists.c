@@ -11,7 +11,7 @@
 list_head team1_list;
 list_head team2_list;
 sec_list_head sec_list;
-
+Trans_head Trans_list;
 
 // and array of strings that represent
 // the commands that will be executed
@@ -77,7 +77,6 @@ void add_command_to_list(char *command) {
 				is_sparse = 1;
 			}
 			else if (strncmp(token, "METHOD", 6) == 0) {
-				is_trans = 1;
 				// if (strcmp(&token[7], "TR") == 0) {	 // TODO. erase this as it is the default
 				// 	tr_method = TRAPEZOIDAL;
 				// }
@@ -101,7 +100,11 @@ void add_command_to_list(char *command) {
 	strcmp_res = strncmp(command, ".DC ", 4);
 	if (strcmp_res != 0) {
 		strcmp_res = strncmp(command, ".TRAN ", 6);
+		if (strcmp_res == 0)
+			is_trans = 1;
 	}
+
+
 
 	// if current command is .dc or .tran and the previous one is also .dc or .tran..
 	if ( (strcmp_res == 0) && (prev_command_is_dc_or_tran == 1) ) {
@@ -351,7 +354,86 @@ int insert_mos(char *name, element_h *node_d, element_h *node_g, element_h *node
 	return 0;
 }
 
+void init_list_trans(){
+	int i;
 
+	Trans_list.size = 0;
+	Trans_list.list = NULL;
+	Trans_list.k = NULL;
+
+	// iterate through lists
+	for (i = 0; i < team1_list.size; i++) {
+		if(team1_list.list[i].tr_type != TR_TYPE_NONE){
+			Trans_list.list = realloc(Trans_list.list,(Trans_list.size + 1)* sizeof(list_element *));
+			Trans_list.k = realloc(Trans_list.k, (Trans_list.size + 1) * sizeof(unsigned long));
+			if ((Trans_list.list == NULL) || (Trans_list.k == NULL)) {
+				printf("Error. Memory allocation problems. Exiting..\n");
+				exit(EXIT_FAILURE);
+			}
+			Trans_list.list[Trans_list.size] = &team1_list.list[i];
+			Trans_list.k[Trans_list.size] = -1;
+			Trans_list.size++;
+		}
+	}
+	for (i = 0; i < team2_list.size; i++) {
+		if(team2_list.list[i].tr_type != TR_TYPE_NONE){
+			Trans_list.list = realloc(Trans_list.list,(Trans_list.size + 1)* sizeof(list_element *));
+			Trans_list.k = realloc(Trans_list.k, (Trans_list.size + 1) * sizeof(unsigned long));
+			if ((Trans_list.list == NULL) || (Trans_list.k == NULL)) {
+				printf("Error. Memory allocation problems. Exiting..\n");
+				exit(EXIT_FAILURE);
+			}
+			Trans_list.list[Trans_list.size] = &team2_list.list[i];
+			Trans_list.k[Trans_list.size] = i;
+			Trans_list.size++;
+
+		}
+	}
+
+}
+
+void print_list_trans(){
+
+	int i;
+	char type[32];
+
+	printf("\n");
+	for(i = 0;i < Trans_list.size; i++){
+
+		switch (Trans_list.list[i]->type) {
+			case I:
+				strcpy(type, "I");
+				break;
+			case V:
+				strcpy(type, "V");
+				break;
+			default:
+				break;
+		}
+
+		printf("%s%s ",type,Trans_list.list[i]->name);
+
+		switch (Trans_list.list[i]->tr_type) {
+			case TR_TYPE_NONE:
+				break;
+			case TR_TYPE_PWL:
+				strcpy(type, "PWL");
+				break;
+			case TR_TYPE_PULSE:
+				strcpy(type, "PULSE");
+				break;
+			case TR_TYPE_SIN:
+				strcpy(type, "SIN");
+				break;
+			case TR_TYPE_EXP:
+				strcpy(type, "EXP");
+				break;
+			default:
+				break;
+		}
+		printf("%s\n",type);
+	}
+}
 
 // this function will iterate though the lists will create a unique file for gnuplot
 // for each component that has a transient spec (running up to 3s) (used only for debugging)
@@ -366,7 +448,7 @@ void test_tran_spec() {
 	for (i = 0; i < team1_list.size; i++) {
 		fp = NULL;
 		get_func_ptr = NULL;
-		strcpy(tmp, "VElem");
+		strcpy(tmp, "IElem");
 		strcat(tmp, team1_list.list[i].name);
 
 		switch (team1_list.list[i].tr_type) {
@@ -409,7 +491,7 @@ void test_tran_spec() {
 	for (i = 0; i < team2_list.size; i++) {
 		fp = NULL;
 		get_func_ptr = NULL;
-		strcpy(tmp, "IElem");
+		strcpy(tmp, "VElem");
 		strcat(tmp, team2_list.list[i].name);
 
 		switch (team2_list.list[i].tr_type) {

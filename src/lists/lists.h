@@ -146,4 +146,19 @@ extern void print_list1();
 extern void print_list2();
 extern void print_sec_list();
 
+
+//Trans
+typedef struct Trans_head {
+	unsigned long size;
+	list_element **list;
+	unsigned long *k;
+}Trans_head;
+
+extern Trans_head Trans_list;
+extern void init_list_trans();
+extern void print_list_trans();
+
+
+
+
 #endif

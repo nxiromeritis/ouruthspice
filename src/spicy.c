@@ -44,6 +44,10 @@ int main(int argc, char *argv[]) {
 
 	printHastable();
 	print_id_list();
+
+	init_list_trans();
+	print_list_trans();
+
 	//print_list1();
 	//print_list2();
 	//print_sec_list();
@@ -55,6 +59,7 @@ int main(int argc, char *argv[]) {
 						   ((solver_type == 3)?"bi_cg_solver":"unknown_solver")))));
 	printf("ITOL: %e\n", itol);
 	printf("%sSPARSE\n", is_sparse?"":"NOT ");
+	printf("%sTRANSIENT ANALYSIS\n", is_trans?"":"NO ");
 	if (is_trans) {
 		printf("TRANSIENT_METHOD: %s\n", (tr_method == TRAPEZOIDAL)?"TRAPEZOIDAL":"BACKWARD_EULER");
 	}
@@ -80,14 +85,18 @@ int main(int argc, char *argv[]) {
 	// TODO ADD if is_sparse == 1 and call new solvers/functions
 	switch(solver_type) {
 		case LU_SOLVER:
+			gsl_x_vector = gsl_vector_alloc(mna_dimension_size);
+			gsl_p = gsl_permutation_alloc(mna_dimension_size);
 			decomp_lu();
 			break;
 		case CHOL_SOLVER:
+			gsl_x_vector = gsl_vector_alloc(mna_dimension_size);
 			decomp_cholesky();
 			break;
 		// iterative solving method. No need to decompose
 		case CG_SOLVER:
 		case BI_CG_SOLVER:
+			gsl_x_vector = gsl_vector_calloc(mna_dimension_size);
 			initialise_iter_methods();
 			break;
 		default:
@@ -99,40 +108,59 @@ int main(int argc, char *argv[]) {
 	// this function call will generate a unique file for each component
 	// that has a transient spec for gnuplot plotting
 	test_tran_spec(); //debug
-
-	print_command_list();
-	execute_commands();
-
 	switch(solver_type) {
 		case LU_SOLVER:
 			solve_lu();
-			gsl_permutation_free(gsl_p);
-			gsl_vector_free(gsl_x_vector);
+
+			//gsl_permutation_free(gsl_p);
+			//gsl_vector_free(gsl_x_vector);
 			break;
 		case CHOL_SOLVER:
 			solve_cholesky();
-			gsl_vector_free(gsl_x_vector);
+
+			//gsl_vector_free(gsl_x_vector);
 			break;
 		case CG_SOLVER:
+
 			solve_CG_iter_method();
 			free_gsl_vectors();
 			break;
 		case BI_CG_SOLVER:
+
 			solve_BI_CG_iter_method();
-			free_gsl_vectors();
+			/*free_gsl_vectors();*/
 			break;
 		default:
 			break;
 	}
 
+	default_X_vector_copy = gsl_vector_alloc(mna_dimension_size);
+	default_mna_vector_copy = (double *)malloc(mna_dimension_size*sizeof(double));
+	gsl_vector_memcpy(default_X_vector_copy,gsl_x_vector);
+	memcpy(default_mna_vector_copy,mna_vector,mna_dimension_size*sizeof(double));
+
 
 	dump_MNA_nodes();
 
+	print_command_list();
+	execute_commands();
 
+	gsl_vector_free(default_X_vector_copy);
+	free(default_mna_vector_copy);
+	gsl_vector_free(gsl_x_vector);
+
+	if (solver_type == LU_SOLVER)
+		gsl_permutation_free(gsl_p);
+
+
+	free_gsl_vectors();
 	free_MNA_system();
 	freeHashTable();
 	free_lists();
 	free_command_list();
+	free(Trans_list.list);
+	free(Trans_list.k);
+
 
 	if (css_S)
 		cs_sfree(css_S);

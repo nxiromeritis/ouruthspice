@@ -9,6 +9,11 @@
 extern double *mna_array;
 extern double *mna_vector;
 extern double *default_mna_vector_copy;
+extern gsl_vector *default_X_vector_copy;
+extern double *old_mna_vector;
+extern gsl_vector *gsl_old_x_vector;
+extern double *B_vector;
+extern double factor;
 extern unsigned long mna_dimension_size;
 
 extern double *G_array;
@@ -99,5 +104,7 @@ extern double get_pwl_val(PwlInfoT *data, double t);
 
 void create_trans_MNA_array();
 void reset_MNA_array();
+void print_C_array();
+void print_G_array();
 
 #endif
