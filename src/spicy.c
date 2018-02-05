@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
 		case CG_SOLVER:
 
 			solve_CG_iter_method();
-			free_gsl_vectors();
+			/*free_gsl_vectors();*/
 			break;
 		case BI_CG_SOLVER:
 
@@ -135,7 +135,11 @@ int main(int argc, char *argv[]) {
 	}
 
 	default_X_vector_copy = gsl_vector_alloc(mna_dimension_size);
-	default_mna_vector_copy = (double *)malloc(mna_dimension_size*sizeof(double));
+
+	if (!is_sparse) {
+		default_mna_vector_copy = (double *)malloc(mna_dimension_size*sizeof(double));
+	}
+
 	gsl_vector_memcpy(default_X_vector_copy,gsl_x_vector);
 	memcpy(default_mna_vector_copy,mna_vector,mna_dimension_size*sizeof(double));
 

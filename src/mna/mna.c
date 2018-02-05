@@ -38,6 +38,9 @@ cs *compr_col_A = NULL;
 css *css_S = NULL;
 csn *csn_N = NULL;
 
+// used for transient analysis
+cs *triplet_C = NULL;
+
 // variables used for Trans
 double *B_vector = NULL;
 double *old_mna_vector = NULL;
@@ -1044,6 +1047,7 @@ void execute_commands() {
 						default:
 							break;
 					}
+
 					/*fprintf(node_fp, "%lf\t\t%lf\n", j, node->val);*/
 					fprintf(node_fp, "%lf\t\t%e\n", j, node->val);
 				}
