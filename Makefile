@@ -29,10 +29,10 @@ build/%.o: src/%.c src/%.h
 
 clean: 
 	rm -rvf $(OBJ) $(EXECUTABLE) $(BFOLDERS)
-	rm -rvf *.txt *.png draw.sh
+	rm -rvf *.txt *.out *.png draw.sh
 
 clean_obj:
 	rm -rvf $(OBJ) $(EXECUTABLE) $(BFOLDERS)
 
 clean_outputs:
-	rm -rvf *.txt *.png draw.sh
+	rm -rvf *.txt *.out *.png draw.sh

@@ -11,7 +11,7 @@
 list_head team1_list;
 list_head team2_list;
 sec_list_head sec_list;
-
+Trans_head Trans_list;
 
 // and array of strings that represent
 // the commands that will be executed
@@ -28,7 +28,7 @@ unsigned int command_list_len = 0;
 // NOTE4: DC commands that have not print or plot commands after them will be ignored DURING EXECUTION
 // NOTE5: Possible errors contained in command parameters will be unveiled during execution (interpreter logic)
 void add_command_to_list(char *command) {
-	static byte prev_command_is_dc_or_tran = 0;
+	static byte prev_command_is_dc_or_ac_or_tran = 0;
 	int strcmp_res;
 
 	char *token = NULL;
@@ -77,7 +77,6 @@ void add_command_to_list(char *command) {
 				is_sparse = 1;
 			}
 			else if (strncmp(token, "METHOD", 6) == 0) {
-				is_trans = 1;
 				// if (strcmp(&token[7], "TR") == 0) {	 // TODO. erase this as it is the default
 				// 	tr_method = TRAPEZOIDAL;
 				// }
@@ -101,10 +100,21 @@ void add_command_to_list(char *command) {
 	strcmp_res = strncmp(command, ".DC ", 4);
 	if (strcmp_res != 0) {
 		strcmp_res = strncmp(command, ".TRAN ", 6);
+		if (strcmp_res == 0) {
+			is_trans = 1;
+		} 
+		else {
+			strcmp_res = strncmp(command, ".AC ", 4);
+			if (strcmp_res == 0) {
+			is_ac = 1;
+		} 
+		}
 	}
 
-	// if current command is .dc or .tran and the previous one is also .dc or .tran..
-	if ( (strcmp_res == 0) && (prev_command_is_dc_or_tran == 1) ) {
+
+
+	// if current command is .dc or .tran or .ac and the previous one is also .dc or .tran..
+	if ( (strcmp_res == 0) && (prev_command_is_dc_or_ac_or_tran == 1) ) {
 
 		// the new dc command will overwrite the previous one
 		free(command_list[command_list_len-1]);
@@ -130,11 +140,11 @@ void add_command_to_list(char *command) {
 	}
 
 	// update the .dc or .tran flag
-	/*prev_command_is_dc_or_tran = !(strcmp_res); // correct but lacks readability*/
+	/*prev_command_is_dc_or_ac_or_tran = !(strcmp_res); // correct but lacks readability*/
 	if (strcmp_res == 0)
-		prev_command_is_dc_or_tran = 1;
+		prev_command_is_dc_or_ac_or_tran = 1;
 	else
-		prev_command_is_dc_or_tran = 0;
+		prev_command_is_dc_or_ac_or_tran = 0;
 
 }
 
@@ -227,7 +237,7 @@ void free_lists(){
 
 // Insert an element into one of the two lists
 int insert_element(list_head *list, c_type type, char *name, element_h *node_plus, element_h *node_minus, double value, \
-				   int tr_type, void *tran_spec_data){
+				   int tr_type, void *tran_spec_data, int ac_usability, void *ac_spec){
 	list_element *tmp;
 
 	tmp = realloc(list->list, ((list->size + 1) * sizeof(list_element)));
@@ -253,6 +263,10 @@ int insert_element(list_head *list, c_type type, char *name, element_h *node_plu
 	// add transient spec information
 	list->list[list->size].tr_type = tr_type;
 	list->list[list->size].tran_spec.data = tran_spec_data;
+
+	// add AC spec information
+	list->list[list->size].ac_usability = ac_usability;
+	list->list[list->size].ac_spec.data = ac_spec;
 
 	list->size++;
 	printf("%lu\n", list->size);
@@ -351,7 +365,86 @@ int insert_mos(char *name, element_h *node_d, element_h *node_g, element_h *node
 	return 0;
 }
 
+void init_list_trans(){
+	int i;
 
+	Trans_list.size = 0;
+	Trans_list.list = NULL;
+	Trans_list.k = NULL;
+
+	// iterate through lists
+	for (i = 0; i < team1_list.size; i++) {
+		if(team1_list.list[i].tr_type != TR_TYPE_NONE){
+			Trans_list.list = realloc(Trans_list.list,(Trans_list.size + 1)* sizeof(list_element *));
+			Trans_list.k = realloc(Trans_list.k, (Trans_list.size + 1) * sizeof(unsigned long));
+			if ((Trans_list.list == NULL) || (Trans_list.k == NULL)) {
+				printf("Error. Memory allocation problems. Exiting..\n");
+				exit(EXIT_FAILURE);
+			}
+			Trans_list.list[Trans_list.size] = &team1_list.list[i];
+			Trans_list.k[Trans_list.size] = -1;
+			Trans_list.size++;
+		}
+	}
+	for (i = 0; i < team2_list.size; i++) {
+		if(team2_list.list[i].tr_type != TR_TYPE_NONE){
+			Trans_list.list = realloc(Trans_list.list,(Trans_list.size + 1)* sizeof(list_element *));
+			Trans_list.k = realloc(Trans_list.k, (Trans_list.size + 1) * sizeof(unsigned long));
+			if ((Trans_list.list == NULL) || (Trans_list.k == NULL)) {
+				printf("Error. Memory allocation problems. Exiting..\n");
+				exit(EXIT_FAILURE);
+			}
+			Trans_list.list[Trans_list.size] = &team2_list.list[i];
+			Trans_list.k[Trans_list.size] = i;
+			Trans_list.size++;
+
+		}
+	}
+
+}
+
+void print_list_trans(){
+
+	int i;
+	char type[32];
+
+	printf("\n");
+	for(i = 0;i < Trans_list.size; i++){
+
+		switch (Trans_list.list[i]->type) {
+			case S_I:
+				strcpy(type, "I");
+				break;
+			case V:
+				strcpy(type, "V");
+				break;
+			default:
+				break;
+		}
+
+		printf("%s%s ",type,Trans_list.list[i]->name);
+
+		switch (Trans_list.list[i]->tr_type) {
+			case TR_TYPE_NONE:
+				break;
+			case TR_TYPE_PWL:
+				strcpy(type, "PWL");
+				break;
+			case TR_TYPE_PULSE:
+				strcpy(type, "PULSE");
+				break;
+			case TR_TYPE_SIN:
+				strcpy(type, "SIN");
+				break;
+			case TR_TYPE_EXP:
+				strcpy(type, "EXP");
+				break;
+			default:
+				break;
+		}
+		printf("%s\n",type);
+	}
+}
 
 // this function will iterate though the lists will create a unique file for gnuplot
 // for each component that has a transient spec (running up to 3s) (used only for debugging)
@@ -474,7 +567,7 @@ void print_list1 (){
 			case C:
 				printf("-------->Type: " CYN "Capacitor\n" BLU);
 				break;
-			case I:
+			case S_I:
 				printf("-------->Type: " CYN "Current Source\n" BLU);
 				break;
 			default:
@@ -521,7 +614,7 @@ void print_list2 (){
 			case V:
 				printf("-------->Type: " CYN "Voltage Source\n" BLU);
 				break;
-			case I:
+			case S_I:
 				printf("-------->Type: " CYN "Current Source [G2]\n" BLU);
 				break;
 			default:

@@ -73,7 +73,8 @@ void parse_command(char *command) {
 		 (strcmp(command, ".OPTIONS") == 0) || \
 		 (strncmp(command, ".PRINT ", 7) == 0) || \
 		 (strncmp(command, ".PLOT ", 6) == 0)  || \
-		 (strncmp(command, ".TRAN ", 6) == 0) ) {
+		 (strncmp(command, ".TRAN ", 6) == 0) || \
+		 (strncmp(command, ".DC ", 4) == 0) ) {
 
 		// erase possible \n at the end of the command (probably not necessary)
 		str_ptr = strchr(command, '\n');
@@ -224,10 +225,13 @@ void parse_cir(char *filename) {
 	// offset to pass possible non ascci invisible characters from line
 	unsigned int line_offset = 0;
 
-	// variables used for transient analysis (we have THAT many for optical reasons
+	// variables used for transient and AC analysis (we have THAT many for optical reasons)
 	int tr_type;
+	int ac_usability;
 	void *tran_spec_data;
+	void *ac_spec;
 	double v1, v2, v3, v4, v5, v6, v7;
+	double mag, phase;
 	double *times, *values;
 	unsigned int total_tuples;
 
@@ -276,12 +280,17 @@ void parse_cir(char *filename) {
 		node3_name = NULL;
 		node4_name = NULL;
 		model_name = NULL;
+		// Transient
 		tr_type = TR_TYPE_NONE;
 		tran_spec_data = NULL;
+		ac_spec = NULL;
 		v1 = 0; v2 = 0; v3 = 0;
 		v4 = 0; v5 = 0; v6 = 0; v7 = 0;
 		times = NULL; values = NULL;
 		total_tuples = 0;
+		// AC
+		mag = 0; phase = 0;
+		ac_usability = 0;
 
 		// -1 if not present or part of the component parsed
 		val = -1;
@@ -418,9 +427,9 @@ void parse_cir(char *filename) {
 				}
 				else if ((toupper(type) == 'I') || (toupper(type) == 'V')) { // transient analysis
 
-				    /* ******************************* *
-					 * START OF TRANSIENT SPEC PARSING *
-					 * ******************************* */
+				    /* ********************************** *
+					 * START OF TRANSIENT/AC SPEC PARSING *
+					 * ********************************** */
 
 					if ((strstr("EXP SIN PULSE PWL", token) != NULL) \
 					 || (strstr("exp sin pulse pwl", token) != NULL)) {
@@ -671,14 +680,40 @@ void parse_cir(char *filename) {
 
 						break;
 					}
+					else if ((strncmp("AC", token, 2) == 0) || (strncmp("ac", token, 2) == 0)) {
+						printf("AC Spec Found\n");
+
+						// parse mag
+						token = strtok(NULL, delim);
+						if (parse_double(&mag, token) == 0) {
+							printf("Syntax error. Value (%s) cannot be converted to double\n", token);
+							exit(EXIT_FAILURE);
+						}
+
+						// parse phase
+						token = strtok(NULL, delim);
+						if (parse_double(&phase, token) == 0) {
+							printf("Syntax error. Value (%s) cannot be converted to double\n", token);
+							exit(EXIT_FAILURE);
+						}
+
+						// check if there is another argument (syntax error)
+						token = strtok(NULL, delim);
+						if (token != NULL) {
+							printf("Error. Too many fields in AC analysys\n");
+							exit(EXIT_FAILURE);
+						}
+
+						ac_usability = 1;
+					}
 					else {
 						printf("syntax error. Type '%c' has unknown fifth field (%s)\n", type, token);
 						exit(EXIT_FAILURE);
 					}
 
-					/* ***************************** *
-					 * END OF TRANSIENT SPEC PARSING *
-					 * ***************************** */
+					/* ******************************** *
+					 * END OF TRANSIENT/AC SPEC PARSING *
+					 * ******************************** */
 
 				}
 				else {
@@ -1051,7 +1086,22 @@ void parse_cir(char *filename) {
 
 
 
-		// Create structures for transient analysis info
+		// Create structures for AC analysys info
+		if (ac_usability) {
+			ac_spec = (void *) malloc(sizeof(ACSpecT));
+			if (ac_spec == NULL) {
+				printf("Error Memory allocation problems. Exiting..\n");
+				exit(EXIT_FAILURE);
+			}
+
+			((ACInfoT *)ac_spec)->mag = mag;
+			((ACInfoT *)ac_spec)->phase = phase;
+		}
+		else {
+			ac_spec = NULL;
+		}
+
+		// Create structures for transient analysys info
 		// Note: update the free functions of the lists and delete the frees below (done)
 		/*free(times);*/
 		/*free(values);*/
@@ -1144,14 +1194,14 @@ void parse_cir(char *filename) {
 				// add component to node component list (hashtable field)
 				// update components list (lists)
 				if (has_G2 == 0){
-					if (insert_element(&team1_list, (toupper(type)=='I'?I:(toupper(type)=='R'?R:C)), \
-										name, node1, node2, val, tr_type, tran_spec_data) == -1) {
+					if (insert_element(&team1_list, (toupper(type)=='I'?S_I:(toupper(type)=='R'?R:C)), \
+										name, node1, node2, val, tr_type, tran_spec_data, ac_usability, ac_spec) == -1) {
 						printf("insert_element. Memory allocation problems. Exiting..\n");
 						exit(EXIT_FAILURE);
 					}
 				} else {
-					if (insert_element(&team2_list, (toupper(type)=='I'?I:(toupper(type)=='R'?R:C)), \
-										name, node1, node2, val, tr_type, tran_spec_data) == -1) {
+					if (insert_element(&team2_list, (toupper(type)=='I'?S_I:(toupper(type)=='R'?R:C)), \
+										name, node1, node2, val, tr_type, tran_spec_data, ac_usability, ac_spec) == -1) {
 						printf("insert_element. Memory allocation problems. Exiting..\n");
 						exit(EXIT_FAILURE);
 					}
@@ -1178,7 +1228,7 @@ void parse_cir(char *filename) {
 				// add component to node component list (hashtable field)
 				// update components list (lists)
 				if (insert_element(&team2_list, (toupper(type)=='V'?V:L), name, node1, node2, val, \
-							       tr_type, tran_spec_data) == -1) {
+							       tr_type, tran_spec_data, ac_usability, ac_spec) == -1) {
 					printf("insert_element. Memory allocation problems. Exiting..\n");
 					exit(EXIT_FAILURE);
 				}

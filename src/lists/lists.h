@@ -4,8 +4,8 @@
 #include "../hashtable/hashtable.h"
 
 
-//typedef enum component_type {undefined, R, L, C, V, I, D, M, Q} c_type;
-typedef enum component_type {undefined = 0 , R ='R' , L ='L', C ='C', V ='V', I ='I' , D ='D',M ='M', Q ='Q'} c_type;
+//typedef enum component_type {undefined, R, L, C, V, S_I, D, M, Q} c_type;
+typedef enum component_type {undefined = 0 , R ='R' , L ='L', C ='C', V ='V', S_I ='I', D ='D',M ='M', Q ='Q'} c_type;
 
 #define TR_TYPE_NONE	0
 #define TR_TYPE_SIN		1
@@ -13,6 +13,11 @@ typedef enum component_type {undefined = 0 , R ='R' , L ='L', C ='C', V ='V', I 
 #define TR_TYPE_PULSE	3
 #define TR_TYPE_PWL		4
 
+#define AC_NON_USABLE	0
+#define AC_USABLE		1
+
+#define AC_LIN 			0
+#define AC_LOG 			1
 
 typedef struct ExpInfo {
 	double i1;
@@ -58,6 +63,15 @@ typedef union tranSpec {
 } tranSpecT;
 
 
+typedef struct ACInfo{
+	double mag;
+	double phase;
+} ACInfoT;
+
+typedef union ACSpec {
+	void *data;
+	struct ACInfo *ac_data;
+} ACSpecT;
 
 typedef struct RLCS_list_element {
 	c_type type;
@@ -72,6 +86,10 @@ typedef struct RLCS_list_element {
 	// fields for transient analysis
 	int tr_type;
 	union tranSpec tran_spec;
+
+	// fields for AC analysys
+	int ac_usability;
+	union ACSpec ac_spec;
 }list_element;
 
 
@@ -135,7 +153,7 @@ extern void print_command_list();
 extern void init_lists();
 extern void free_lists();
 
-extern int insert_element(list_head *list, c_type type, char *name, element_h *node_plus, element_h *node_minus, double value, int tr_type, void *tran_spec_data);
+extern int insert_element(list_head *list, c_type type, char *name, element_h *node_plus, element_h *node_minus, double value, int tr_type, void *tran_spec_data, int ac_usability, void *ac_spec);
 
 extern int insert_bjt(char *name, element_h *node_c, element_h *node_b, element_h *node_e, char *model_name);
 extern int insert_diode(char *name, element_h *node_plus, element_h *node_minus, char *model_name);
@@ -145,5 +163,20 @@ extern void test_tran_spec();
 extern void print_list1();
 extern void print_list2();
 extern void print_sec_list();
+
+
+//Trans
+typedef struct Trans_head {
+	unsigned long size;
+	list_element **list;
+	unsigned long *k;
+}Trans_head;
+
+extern Trans_head Trans_list;
+extern void init_list_trans();
+extern void print_list_trans();
+
+
+
 
 #endif

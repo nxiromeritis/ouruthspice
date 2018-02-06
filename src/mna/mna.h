@@ -5,14 +5,34 @@
 #include <gsl/gsl_errno.h>
 #include "../csparse/csparse.h"
 #include "../lists/lists.h"
+#include <math.h>
 
 extern double *mna_array;
 extern double *mna_vector;
 extern double *default_mna_vector_copy;
+extern gsl_vector *default_X_vector_copy;
+extern double *old_mna_vector;
+extern gsl_vector *gsl_old_x_vector;
+extern double *B_vector;
+extern double factor;
 extern unsigned long mna_dimension_size;
+
+extern gsl_matrix_complex *gsl_complex_mna_array;
+extern gsl_vector_complex *gsl_complex_x_vector;
+extern gsl_vector_complex *gsl_complex_b_vector;
+
+extern double freq;
+#define OMEGA 2*M_PI*freq
+
+
+extern int sweep;
+extern int ac_points;
+extern double start_freq;
+extern double end_freq;
 
 extern double *G_array;
 extern double *C_array;
+extern double *C_AC_array;
 
 #define MAX(a, b) ((a)>(b)?(a):(b))
 #define MIN(a, b) ((a)<(b)?(a):(b))
@@ -37,6 +57,7 @@ extern byte solver_type;
 extern byte tr_method;
 extern byte is_sparse;
 extern byte is_trans;
+extern byte is_ac;
 
 extern int plot_type;
 
@@ -99,5 +120,7 @@ extern double get_pwl_val(PwlInfoT *data, double t);
 
 void create_trans_MNA_array();
 void reset_MNA_array();
+void print_C_array();
+void print_G_array();
 
 #endif
