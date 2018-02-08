@@ -113,6 +113,13 @@ void decomp_lu() {
 
 }
 
+void decomp_complex_lu() {
+	int s;
+
+	gsl_p = gsl_permutation_alloc(mna_dimension_size);
+	gsl_linalg_complex_LU_decomp(gsl_complex_mna_array, gsl_p, &s);
+}
+
 void decomp_cholesky() {
 
 	if (is_sparse) {
@@ -132,6 +139,9 @@ void decomp_cholesky() {
 	}
 }
 
+void decomp_complex_cholesky() {
+	gsl_linalg_complex_cholesky_decomp(gsl_complex_mna_array);
+}
 
 void initialise_iter_methods() {
 	unsigned long i,p;
@@ -267,6 +277,17 @@ void solve_lu() {
 
 }
 
+void solve_complex_lu() {
+	unsigned long i;
+
+	gsl_linalg_complex_LU_solve(gsl_complex_mna_array, gsl_p, gsl_complex_b_vector, gsl_complex_x_vector);
+
+	for (i=1; i < total_ids; i++) {
+		id_to_node[i]->real_val = GSL_REAL(gsl_vector_complex_get(gsl_complex_x_vector, i-1));
+		id_to_node[i]->img_val = GSL_IMAG(gsl_vector_complex_get(gsl_complex_x_vector, i-1));
+	}
+}
+
 
 void solve_cholesky() {
 	unsigned long i;
@@ -304,6 +325,17 @@ void solve_cholesky() {
 		}
 	}
 
+}
+
+void solve_complex_cholesky() {
+	unsigned long i;
+
+	gsl_linalg_complex_cholesky_solve(gsl_complex_mna_array, gsl_complex_b_vector, gsl_complex_x_vector);
+
+	for (i=1; i < total_ids; i++) {
+		id_to_node[i]->real_val = GSL_REAL(gsl_vector_complex_get(gsl_complex_x_vector, i-1));
+		id_to_node[i]->img_val = GSL_IMAG(gsl_vector_complex_get(gsl_complex_x_vector, i-1));
+	}
 }
 
 
@@ -1556,7 +1588,7 @@ void execute_commands() {
 			prev_plot_type = plot_type;
 			plot_type = AC_PLOT;
 		}
-		if ((plot_type == TRAN_PLOT) &&
+		if ((plot_type == AC_PLOT) &&
 			((strncmp(command_list[i], ".PRINT ", 7) == 0) || (strncmp(command_list[i], ".PLOT ", 6) == 0))) {
 
 			// bypass command name
@@ -1618,18 +1650,30 @@ void execute_commands() {
 				continue;
 			}
 
-			// reminder: variable var_name is the I or V that changes value during the DC or TRAN analysis
-			// strlen(node_name) + 10 = strlen(node_name) + strlen("_TRAN") + strlen(".txt") + 1 for '\0'
-			filename = (char *) malloc((strlen(node_name) + 10)*sizeof(char));
+			FILE *node_fp2;
+			char *filename2;
+
+			filename = (char *) malloc((strlen(node_name) + 14)*sizeof(char));
 			if (filename == NULL) {
 				printf("Error. Memory allocation problems. Exiting..\n");
 				exit(EXIT_FAILURE);
 			}
+			filename2 = (char *) malloc((strlen(node_name) + 12)*sizeof(char));
+			if (filename2 == NULL) {
+				printf("Error. Memory allocation problems. Exiting..\n");
+				exit(EXIT_FAILURE);
+			}
 
-			sprintf(filename, "%s_TRAN.txt", node_name);
+			sprintf(filename, "%s_AC_Phase.txt", node_name);
+			sprintf(filename2, "%s_AC_MAG.txt", node_name);
 
 			node_fp = fopen(filename, "w");
 			if (node_fp == NULL) {
+				perror("fopen");
+				exit(EXIT_FAILURE);
+			}
+			node_fp2 = fopen(filename2, "w");
+			if (node_fp2 == NULL) {
 				perror("fopen");
 				exit(EXIT_FAILURE);
 			}
@@ -1641,43 +1685,68 @@ void execute_commands() {
 				perror("fopen");
 				exit(EXIT_FAILURE);
 			}
-			if ((plot_type != prev_plot_type)) {
-				// it is guaranteed that at this point is_ac is set to 1
 
+			init_AC_MNA_system();
 
-				//memcpy(G_array, mna_array, ((mna_dimension_size * mna_dimension_size) * sizeof(double)));
-				create_trans_MNA_array();
-				printf("G Array\n\n");
-				print_G_array();
-				printf("C Array\n\n");
-				print_C_array();
-				printf(" G_array + (factor * C Array)\n\n");
-				print_MNA_array();
-				// free everything first as the decomposition and initialisation allocations
-				// will be performed again
+			double phase, mag;
 
-				// perform decomposition
+			double step = ((end_freq - start_freq) / ac_points);
+			for (freq=start_freq; freq < end_freq + 0.000000001; freq = freq + step) {
+				fill_AC_MNA_array();
+
+				if (is_sparse) {
+					printf("Sparse methods are not supported into this version\n");
+					break;
+				}
+
+				if ((solver_type == CG_SOLVER) || (solver_type == BI_CG_SOLVER)) {
+					printf("Iterative methods are not supported into this version\n");
+					break;
+				}
 				switch(solver_type) {
 					case LU_SOLVER:
-						//gsl_permutation_free(gsl_p);
-						//gsl_vector_free(gsl_x_vector);
-						decomp_lu();
+						decomp_complex_lu();
+						solve_complex_lu();
 						break;
 					case CHOL_SOLVER:
-						//gsl_vector_free(gsl_x_vector);
-						decomp_cholesky();
-						break;
-					// iterative solving method. No need to decompose
-					case CG_SOLVER:
-					case BI_CG_SOLVER:
-						free_gsl_vectors();
-						initialise_iter_methods();
+						decomp_complex_cholesky();
+						solve_complex_cholesky();
 						break;
 					default:
 						printf(RED "Error uknown solver type specified..\n" NRM);
 						exit(EXIT_FAILURE);
 				}
+
+				phase = atan(node->img_val / node->real_val);
+				mag = sqrt(pow(node->img_val, 2) + pow(node->real_val, 2));
+
+				fprintf(node_fp, "%lf\t\t%e\n", j, phase);
+				fprintf(node_fp2, "%lf\t\t%e\n", j, mag);
+
 			}
+			//Draw plot
+
+			fprintf(fp_draw, "gnuplot -e \"set terminal png size 1024, 1024;");
+			
+			fprintf(fp_draw, "set output \\\"%s_AC_Phase.png\\\";",node_name);
+			fprintf(fp_draw, "plot \\\"%s\\\" using 1:2 with linespoints;\"\n", filename);
+			// redirect sterr to stdout and redirect stdout to /dev/null to avoid viewing xdg-open warnings
+			fprintf(fp_draw, "xdg-open \"%s_AC_Phase.png\" > /dev/null 2>&1\n",node_name);
+			
+			fprintf(fp_draw, "set output \\\"%s_AC_MAG.png\\\";",node_name);
+			fprintf(fp_draw, "plot \\\"%s\\\" using 1:2 with linespoints;\"\n", filename2);
+			// redirect sterr to stdout and redirect stdout to /dev/null to avoid viewing xdg-open warnings
+			fprintf(fp_draw, "xdg-open \"%s_AC_MAG.png\" > /dev/null 2>&1\n",node_name);
+
+
+			fclose(node_fp);
+			fclose(node_fp2);
+			fclose(fp_draw);
+			free(filename);
+			free(filename2);
+			free(node_name);
+
+			free_AC_MNA_array();
 		}
 	}
 
@@ -1693,10 +1762,14 @@ void execute_commands() {
 		var_name = NULL;
 	}
 }
-
-void create_AC_MNA_system() {
+void init_AC_MNA_system() {
 	gsl_complex element;
-	int i, j;
+	double re, im;
+	int i;
+	unsigned long node_plus_idx;
+	unsigned long node_minus_idx;
+
+	init_list_ac();
 
 	if (gsl_complex_mna_array == NULL)
 		gsl_complex_mna_array = gsl_matrix_complex_calloc(mna_dimension_size, mna_dimension_size);
@@ -1707,12 +1780,55 @@ void create_AC_MNA_system() {
 	if (gsl_complex_b_vector == NULL)
 		gsl_complex_b_vector = gsl_vector_complex_calloc(mna_dimension_size);
 
+	gsl_vector_complex_set_all(gsl_complex_b_vector, GSL_COMPLEX_ZERO);
+
+	// printf("%d %d\n", AC_list.size, mna_dimension_size);
+	for (i = 0; i < AC_list.size; i++){
+		re = PHASOR_REAL(AC_list.list[i]->ac_spec.ac_data->mag, AC_list.list[i]->ac_spec.ac_data->phase);
+		im = PHASOR_IMG(AC_list.list[i]->ac_spec.ac_data->mag, AC_list.list[i]->ac_spec.ac_data->phase);
+
+		node_plus_idx = AC_list.list[i]->node_plus->id -1;
+		node_minus_idx = AC_list.list[i]->node_minus->id -1;
+
+		GSL_SET_COMPLEX(&element, re, im);
+		// printf("%d\n", AC_list.k[i]);
+		if (AC_list.list[i]->type == S_I) {
+			if ((node_minus_idx + 1) != 0){
+				gsl_vector_complex_set(gsl_complex_b_vector, node_minus_idx, element);
+			}
+
+			// underflow handling
+			if ((node_plus_idx + 1) != 0){
+				GSL_SET_COMPLEX(&element, -re, -im);
+				gsl_vector_complex_set(gsl_complex_b_vector, node_plus_idx, element);
+			}
+		}
+		else { // for V
+			gsl_vector_complex_set(gsl_complex_b_vector, (total_ids - 1 + AC_list.k[i]), element);
+		}
+	}
+}
+
+void fill_AC_MNA_array() {
+	gsl_complex element;
+	int i, j;
+
+	gsl_matrix_complex_set_all(gsl_complex_mna_array, GSL_COMPLEX_ZERO);
 	for (i = 0; i < mna_dimension_size; i++) {
 		for (j = 0; j < mna_dimension_size; j++){
 			GSL_SET_COMPLEX(&element, G_array[i * mna_dimension_size + j], OMEGA * C_AC_array[i * mna_dimension_size + j]);
 			gsl_matrix_complex_set(gsl_complex_mna_array, i, j, element);
 		}
 	}
+}
+
+void free_AC_MNA_array() {
+	gsl_matrix_complex_free(gsl_complex_mna_array);
+	gsl_vector_complex_free(gsl_complex_b_vector);
+	gsl_vector_complex_free(gsl_complex_x_vector);
+
+	free(AC_list.list);
+	free(AC_list.k);
 }
 
 // TODO if is sparse then...

@@ -12,6 +12,7 @@ list_head team1_list;
 list_head team2_list;
 sec_list_head sec_list;
 Trans_head Trans_list;
+AC_head AC_list;
 
 // and array of strings that represent
 // the commands that will be executed
@@ -397,6 +398,44 @@ void init_list_trans(){
 			Trans_list.list[Trans_list.size] = &team2_list.list[i];
 			Trans_list.k[Trans_list.size] = i;
 			Trans_list.size++;
+
+		}
+	}
+
+}
+
+void init_list_ac(){
+	int i;
+
+	AC_list.size = 0;
+	AC_list.list = NULL;
+	AC_list.k = NULL;
+
+	// iterate through lists
+	for (i = 0; i < team1_list.size; i++) {
+		if(team1_list.list[i].ac_usability == AC_USABLE){
+			AC_list.list = realloc(AC_list.list,(AC_list.size + 1)* sizeof(list_element *));
+			AC_list.k = realloc(AC_list.k, (AC_list.size + 1) * sizeof(unsigned long));
+			if ((AC_list.list == NULL) || (AC_list.k == NULL)) {
+				printf("Error. Memory allocation problems. Exiting..\n");
+				exit(EXIT_FAILURE);
+			}
+			AC_list.list[AC_list.size] = &team1_list.list[i];
+			AC_list.k[AC_list.size] = i;
+			AC_list.size++;
+		}
+	}
+	for (i = 0; i < team2_list.size; i++) {
+		if(team2_list.list[i].ac_usability == AC_USABLE){
+			AC_list.list = realloc(AC_list.list,(AC_list.size + 1)* sizeof(list_element *));
+			AC_list.k = realloc(AC_list.k, (AC_list.size + 1) * sizeof(unsigned long));
+			if ((AC_list.list == NULL) || (AC_list.k == NULL)) {
+				printf("Error. Memory allocation problems. Exiting..\n");
+				exit(EXIT_FAILURE);
+			}
+			AC_list.list[AC_list.size] = &team2_list.list[i];
+			AC_list.k[AC_list.size] = i;
+			AC_list.size++;
 
 		}
 	}

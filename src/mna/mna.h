@@ -22,8 +22,9 @@ extern gsl_vector_complex *gsl_complex_x_vector;
 extern gsl_vector_complex *gsl_complex_b_vector;
 
 extern double freq;
-#define OMEGA 2*M_PI*freq
-
+#define OMEGA (2*M_PI*freq)
+#define PHASOR_REAL(m,f) (m*cos(f))
+#define PHASOR_IMG(m,f) (m*sin(f))
 
 extern int sweep;
 extern int ac_points;
@@ -123,4 +124,7 @@ void reset_MNA_array();
 void print_C_array();
 void print_G_array();
 
+void init_AC_MNA_system();
+void fill_AC_MNA_array();
+void free_AC_MNA_array();
 #endif

@@ -9,6 +9,9 @@ typedef struct element_h{
 	// according to the connection type
 
 	double val;
+
+	double real_val;
+	double img_val;
 	struct element_h *next;
 
 }element_h;

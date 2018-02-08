@@ -74,7 +74,7 @@ void parse_command(char *command) {
 		 (strncmp(command, ".PRINT ", 7) == 0) || \
 		 (strncmp(command, ".PLOT ", 6) == 0)  || \
 		 (strncmp(command, ".TRAN ", 6) == 0) || \
-		 (strncmp(command, ".DC ", 4) == 0) ) {
+		 (strncmp(command, ".AC ", 4) == 0) ) {
 
 		// erase possible \n at the end of the command (probably not necessary)
 		str_ptr = strchr(command, '\n');
@@ -1088,7 +1088,7 @@ void parse_cir(char *filename) {
 
 		// Create structures for AC analysys info
 		if (ac_usability) {
-			ac_spec = (void *) malloc(sizeof(ACSpecT));
+			ac_spec = (void *) malloc(sizeof(ACInfoT));
 			if (ac_spec == NULL) {
 				printf("Error Memory allocation problems. Exiting..\n");
 				exit(EXIT_FAILURE);

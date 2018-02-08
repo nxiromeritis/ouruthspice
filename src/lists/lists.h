@@ -172,8 +172,17 @@ typedef struct Trans_head {
 	unsigned long *k;
 }Trans_head;
 
+// AC
+typedef struct AC_head {
+	unsigned long size;
+	list_element **list;
+	unsigned long *k;
+} AC_head;
+
 extern Trans_head Trans_list;
+extern AC_head AC_list;
 extern void init_list_trans();
+extern void init_list_ac();
 extern void print_list_trans();
 
 
