@@ -14,7 +14,7 @@ all: $(OBJ)
 
 colors_off: DFLAGS = 
 colors_off: $(OBJ)
-	@echo "\nBuild with colored output.."
+	@echo "\nBuild without colored output.."
 	$(CC) $(OBJ) -o $(EXECUTABLE) $(CLINK)
 
 build/%/%.o: src/%/%.c src/%/%.h

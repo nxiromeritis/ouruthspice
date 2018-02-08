@@ -28,6 +28,8 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
+	// delete possbile drawing script
+	system("rm -f draw.sh");
 
 	strcpy(filename, argv[1]);
 
@@ -68,9 +70,20 @@ int main(int argc, char *argv[]) {
 
 	if (is_sparse) {
 		init_triplet();
+		printf("Printing A in triplet form\n");
 		print_sparse_matrix(triplet_A);
+
 		create_compressed_column();
+		printf("Printing A in compressed column form\n");
 		print_sparse_matrix(compr_col_A);
+
+		if (is_trans) {
+			create_compressed_column_C_array();
+			// NOTE create_compressed_column() must always be called before that
+			// function create_G() allocates memory for G
+			create_G();
+		}
+
 	}
 	else {
 		init_MNA_system();
@@ -79,8 +92,8 @@ int main(int argc, char *argv[]) {
 		print_MNA_vector();
 	}
 
-
-
+	default_mna_vector_copy = (double *)calloc(mna_dimension_size, sizeof(double));
+	memcpy(default_mna_vector_copy,mna_vector,mna_dimension_size*sizeof(double));
 
 	// TODO ADD if is_sparse == 1 and call new solvers/functions
 	switch(solver_type) {
@@ -136,12 +149,14 @@ int main(int argc, char *argv[]) {
 
 	default_X_vector_copy = gsl_vector_alloc(mna_dimension_size);
 
-	if (!is_sparse) {
-		default_mna_vector_copy = (double *)malloc(mna_dimension_size*sizeof(double));
+	if ((is_sparse) && ((solver_type == LU_SOLVER) || (solver_type == CHOL_SOLVER))) {
+		memcpy(default_X_vector_copy->data, mna_vector, mna_dimension_size*sizeof(double));
+		memcpy(gsl_x_vector->data, mna_vector, mna_dimension_size*sizeof(double));
+		memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
 	}
-
-	gsl_vector_memcpy(default_X_vector_copy,gsl_x_vector);
-	memcpy(default_mna_vector_copy,mna_vector,mna_dimension_size*sizeof(double));
+	else {
+		gsl_vector_memcpy(default_X_vector_copy,gsl_x_vector);
+	}
 
 
 	dump_MNA_nodes();
@@ -165,17 +180,20 @@ int main(int argc, char *argv[]) {
 	free(Trans_list.list);
 	free(Trans_list.k);
 
-
 	if (css_S)
 		cs_sfree(css_S);
 	if (csn_N)
 		cs_nfree(csn_N);
-
-	if(compr_col_A)
+	if (compr_col_A)
 		cs_spfree(compr_col_A);
-	if(p_vector)
+	if (compr_col_C)
+		cs_spfree(compr_col_C);
+	if (compr_col_G)
+		cs_spfree(compr_col_G);
+
+	if (p_vector)
 		free(p_vector);
-	if(q_vector)
+	if (q_vector)
 		free(q_vector);
 
 

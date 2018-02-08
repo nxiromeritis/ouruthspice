@@ -50,6 +50,10 @@ extern double end_time;
 
 extern cs *triplet_A;
 extern cs *compr_col_A;
+extern cs *triplet_C;
+extern cs *compr_col_C;
+extern cs *compr_col_G;
+
 extern css *css_S;
 extern csn *csn_N;
 
@@ -72,6 +76,9 @@ extern double *q_vector;
 // functions for sparse matrixes
 extern void init_triplet();
 extern void create_compressed_column();
+extern void create_compressed_column_C_array();
+extern void create_G();
+
 extern void print_sparse_matrix(cs *A);
 
 extern void init_MNA_system();

@@ -230,6 +230,9 @@ void parse_cir(char *filename) {
 	double v1, v2, v3, v4, v5, v6, v7;
 	double *times, *values;
 	unsigned int total_tuples;
+	char tmp_str[64];
+	int flag = 1;
+	int idx;
 
 	int i;
 
@@ -422,8 +425,14 @@ void parse_cir(char *filename) {
 					 * START OF TRANSIENT SPEC PARSING *
 					 * ******************************* */
 
-					if ((strstr("EXP SIN PULSE PWL", token) != NULL) \
-					 || (strstr("exp sin pulse pwl", token) != NULL)) {
+					strcpy(tmp_str, token);
+					strtoupper(tmp_str);
+
+					if ((strncmp(tmp_str, "EXP", 3) == 0) \
+					 || (strncmp(tmp_str, "SIN", 3) == 0) \
+					 || (strncmp(tmp_str, "PWL", 3) == 0) \
+					 || (strncmp(tmp_str, "PULSE", 5) == 0)) {
+
 						printf("Transient Spec Found\n");
 
 						// The second letter of the words EXP, SIN, PULSE and PWL is unique
@@ -432,23 +441,43 @@ void parse_cir(char *filename) {
 							printf("PWL function\n");
 							tr_type = TR_TYPE_PWL;
 
+
+							// check if there is no whitespace after the function name (PWL)
+							// (then the first tuple parentheses will be present in the same token)
+							flag = 1;
+							idx = 1;
+							if (strchr(token, '(') != NULL) {
+								idx = 4;
+								flag = 0;
+							}
+
 							// iterate through tuples
 							total_tuples = 0;
 							while (1) {
 
 								// read time
-								token = strtok(NULL, delim);
-
-								// no more tuples
-								if (token == NULL)
-									break;
+								if (flag == 1) {
+									token = strtok(NULL, delim);
+									// no more tuples
+									if (token == NULL)
+										break;
+								}
 
 								// temporarily store time into v1
-								if (parse_double(&v1, &token[1]) == 0) {
+								strcpy(tmp_str, token);
+								if (strchr(tmp_str, ',') != NULL)
+									strchr(tmp_str, ',')[0] = '\0';
+
+								if (parse_double(&v1, &tmp_str[idx]) == 0) {
 									printf("Error. Value (%s) cannot be converted to double\n", token);
 									free(times);
 									free(values);
 									exit(EXIT_FAILURE);
+								}
+
+								if (flag == 0) {
+									flag = 1;
+									idx = 1;
 								}
 
 								// each time should be bigger than the previous one
@@ -521,40 +550,97 @@ void parse_cir(char *filename) {
 							else
 								tr_type = TR_TYPE_PULSE;
 
-							// parse i1
-							token = strtok(NULL, delim);
-							if (parse_double(&v1, &token[1]) == 0) {
-								printf("Syntax error. Value (%s) cannot be converted to double\n", token);
-								exit(EXIT_FAILURE);
+							// parse the fist argument (i1)
+							strcpy(tmp_str, token);
+							strtoupper(tmp_str);
+							if (strncmp(tmp_str, "PULSE(", 6) == 0) {
+
+								if (strchr(tmp_str, ',') != NULL)
+									strchr(tmp_str, ',')[0] = '\0';
+
+								if (parse_double(&v1, &tmp_str[6]) == 0) {
+									printf("Syntax error. Value (%s) cannot be converter to double\n", &token[6]);
+									exit(EXIT_FAILURE);
+								}
 							}
+							else if ((strncmp(tmp_str, "EXP(", 4) == 0) || (strncmp(tmp_str, "SIN(", 4) == 0)) { // exp or sin
+
+								if (strchr(tmp_str, ',') != NULL)
+									strchr(tmp_str, ',')[0] = '\0';
+
+								if (parse_double(&v1, &tmp_str[4]) == 0) {
+									printf("Syntax error. Value (%s) cannot be converted to double\n", &token[3]);
+									exit(EXIT_FAILURE);
+								}
+							}
+							else {  // parentheses open after a whitespace following the function name
+
+								// parse i1
+								token = strtok(NULL, delim);
+
+								strcpy(tmp_str, token);
+								if (strchr(tmp_str, ',') != NULL)
+									strchr(tmp_str, ',')[0] = '\0';
+
+								if (parse_double(&v1, &tmp_str[1]) == 0) {
+									printf("Syntax error. Value (%s) cannot be converted to double\n", token);
+									exit(EXIT_FAILURE);
+								}
+							}
+
 
 							// parse i2 (for exp and pulse) or ia (for sin)
 							token = strtok(NULL, delim);
-							if (parse_double(&v2, token) == 0) {
+
+							strcpy(tmp_str, token);
+							if (strchr(tmp_str, ',') != NULL)
+								strchr(tmp_str, ',')[0] = '\0';
+
+							if (parse_double(&v2, tmp_str) == 0) {
 								printf("Syntax error. Value (%s) cannot be converted to double\n", token);
 								exit(EXIT_FAILURE);
 							}
+
 
 							// parse td1 (exp) or fr (sin) or td (pulse)
 							token = strtok(NULL, delim);
-							if (parse_double(&v3, token) == 0) {
+
+							strcpy(tmp_str, token);
+							if (strchr(tmp_str, ',') != NULL)
+								strchr(tmp_str, ',')[0] = '\0';
+
+							if (parse_double(&v3, tmp_str) == 0) {
 								printf("Syntax error. Value (%s) cannot be converted to double\n", token);
 								exit(EXIT_FAILURE);
 							}
+
+
 
 							// parse tc1 (exp) or td (sin) or tr (pulse)
 							token = strtok(NULL, delim);
-							if (parse_double(&v4, token) == 0) {
+
+							strcpy(tmp_str, token);
+							if (strchr(tmp_str, ',') != NULL)
+								strchr(tmp_str, ',')[0] = '\0';
+
+							if (parse_double(&v4, tmp_str) == 0) {
 								printf("Syntax error. Value (%s) cannot be converted to double\n", token);
 								exit(EXIT_FAILURE);
 							}
 
+
 							// parse td2 (exp) or df (sin) or tf (pulse)
 							token = strtok(NULL, delim);
-							if (parse_double(&v5, token) == 0) {
+
+							strcpy(tmp_str, token);
+							if (strchr(tmp_str, ',') != NULL)
+								strchr(tmp_str, ',')[0] = '\0';
+
+							if (parse_double(&v5, tmp_str) == 0) {
 								printf("Syntax error. Value (%s) cannot be converted to double\n", token);
 								exit(EXIT_FAILURE);
 							}
+
 
 							// parse the last arguments
 							if (tr_type == TR_TYPE_EXP) {  // exp function
@@ -563,19 +649,22 @@ void parse_cir(char *filename) {
 								// parse tc2 (this is the 6th and last argument of exp function)
 								token = strtok(NULL, delim);
 
+								strcpy(tmp_str, token);
+								if (strchr(tmp_str, ',') != NULL)
+									strchr(tmp_str, ',')[0] = '\0';
+
 								// check for ')'
-								if (strchr(token, ')') == NULL) {
+								if (strchr(tmp_str, ')') == NULL) {
 									printf("Error. Parenthesis must close directly after value (%s)\n",\
 									token);
 									exit(EXIT_FAILURE);
 								}
 
-								token[strlen(token)-1] = '\0'; // get rid of ')'
-								if (parse_double(&v6, token) == 0) {
-									printf("Error. Value (%s) cannot be converted to double\n", token);
+								tmp_str[strlen(tmp_str)-1] = '\0'; // get rid of ')'
+								if (parse_double(&v6, tmp_str) == 0) {
+									printf("Error. Value (%s) cannot be converted to double\n", tmp_str);
 									exit(EXIT_FAILURE);
 								}
-								token[strlen(token)] = ')';    // recover previously deleted ')'
 
 
 								// check if there is another argument (syntax error)
@@ -591,19 +680,22 @@ void parse_cir(char *filename) {
 								// parse tc2 (this is the 6th and last argument of sin function)
 								token = strtok(NULL, delim);
 
+								strcpy(tmp_str, token);
+								if (strchr(tmp_str, ',') != NULL)
+									strchr(tmp_str, ',')[0] = '\0';
+
 								// check for ')'
-								if (strchr(token, ')') == NULL) {
+								if (strchr(tmp_str, ')') == NULL) {
 									printf("Error. Parenthesis must close directly after value (%s)\n",\
 									token);
 									exit(EXIT_FAILURE);
 								}
 
-								token[strlen(token)-1] = '\0'; // get rid of ')'
-								if (parse_double(&v6, token) == 0) {
+								tmp_str[strlen(tmp_str)-1] = '\0'; // get rid of ')'
+								if (parse_double(&v6, tmp_str) == 0) {
 									printf("Error. Value (%s) cannot be converted to double\n", token);
 									exit(EXIT_FAILURE);
 								}
-								token[strlen(token)] = ')';    // recover previously deleted ')'
 
 
 								// check if there is another argument (syntax error)
@@ -619,27 +711,36 @@ void parse_cir(char *filename) {
 
 								// parse pw (this is the 6th argument of pulse function)
 								token = strtok(NULL, delim);
-								if (parse_double(&v6, token) == 0) {
+
+								strcpy(tmp_str, token);
+								if (strchr(tmp_str, ',') != NULL)
+									strchr(tmp_str, ',')[0] = '\0';
+
+								if (parse_double(&v6, tmp_str) == 0) {
 									printf("Error. Value (%s) cannot be converted to double\n", token);
 									exit(EXIT_FAILURE);
 								}
 
+
 								// parse per (this is the 7th and last argument of pulse function)
 								token = strtok(NULL, delim);
 
+								strcpy(tmp_str, token);
+								if (strchr(tmp_str, ',') != NULL)
+									strchr(tmp_str, ',')[0] = '\0';
+
 								// check for ')'
-								if (strchr(token, ')') == NULL) {
+								if (strchr(tmp_str, ')') == NULL) {
 									printf("Error. Parenthesis must close directly after value (%s)\n",\
 									token);
 									exit(EXIT_FAILURE);
 								}
 
-								token[strlen(token)-1] = '\0';	// get rid of ')'
-								if (parse_double(&v7, token) == 0) {
+								tmp_str[strlen(tmp_str)-1] = '\0';	// get rid of ')'
+								if (parse_double(&v7, tmp_str) == 0) {
 									printf("Error. Value (%s) cannot be converted to double\n", token);
 									exit(EXIT_FAILURE);
 								}
-								token[strlen(token)] = ')';		// recover previously deleted ')'
 
 
 								// check if there is another argument (syntax error)
@@ -656,7 +757,6 @@ void parse_cir(char *filename) {
 									exit(EXIT_FAILURE);
 								}
 							}
-
 
 							// print the parsed arguments
 							printf("arg1=%lf, arg2=%lf, arg3=%lf, arg4=%lf, "
@@ -711,8 +811,10 @@ void parse_cir(char *filename) {
 					// is G2 was found at 'I' component than transient spec might start
 					// at the sixth field/token instead of the fifth
 					if (has_G2 == 1) {
-						if ((strstr("EXP PULSE SIN PWL", token) != NULL) \
-						 || (strstr("exp pulse sin pwl", token) != NULL)) {
+						if ((strncmp(tmp_str, "EXP", 3) == 0) \
+						 || (strncmp(tmp_str, "SIN", 3) == 0) \
+						 || (strncmp(tmp_str, "PWL", 3) == 0) \
+						 || (strncmp(tmp_str, "PULSE", 5) == 0)) {
 							printf("Transient Spec Found\n");
 
 							// The second letter of the words EXP, SIN, PULSE and PWL is unique
@@ -721,23 +823,40 @@ void parse_cir(char *filename) {
 								printf("PWL function\n");
 								tr_type = TR_TYPE_PWL;
 
+
+								// check if there is no whitespace after the function name (PWL)
+								// (then the first tuple parentheses will be present in the same token)
+								flag = 1;
+								idx = 1;
+								if (strchr(token, '(') != NULL) {
+									idx = 4;
+									flag = 0;
+								}
+
 								// iterate through tuples
 								total_tuples = 0;
 								while (1) {
 
 									// read time
-									token = strtok(NULL, delim);
+									if (flag == 1) {
+										token = strtok(NULL, delim);
+										// no more tuples
+										if (token == NULL)
+											break;
+									}
 
-									// no more tuples
-									if (token == NULL)
-										break;
 
 									// temporarily store time into v1
-									if (parse_double(&v1, &token[1]) == 0) {
+									if (parse_double(&v1, &token[idx]) == 0) {
 										printf("Error. Value (%s) cannot be converted to double\n", token);
 										free(times);
 										free(values);
 										exit(EXIT_FAILURE);
+									}
+
+									if (flag == 0) {
+										flag = 1;
+										idx = 1;
 									}
 
 									// each time should be bigger than the previous one
@@ -817,40 +936,97 @@ void parse_cir(char *filename) {
 								else
 									tr_type = TR_TYPE_PULSE;
 
-								// parse i1
-								token = strtok(NULL, delim);
-								if (parse_double(&v1, &token[1]) == 0) {
-									printf("Syntax error. Value (%s) cannot be converted to double\n", token);
-									exit(EXIT_FAILURE);
+								// parse the fist argument (i1)
+								strcpy(tmp_str, token);
+								strtoupper(tmp_str);
+								if (strncmp(tmp_str, "PULSE(", 6) == 0) {
+
+									if (strchr(tmp_str, ',') != NULL)
+										strchr(tmp_str, ',')[0] = '\0';
+
+									if (parse_double(&v1, &tmp_str[6]) == 0) {
+										printf("Syntax error. Value (%s) cannot be converter to double\n", &token[6]);
+										exit(EXIT_FAILURE);
+									}
 								}
+								else if ((strncmp(tmp_str, "EXP(", 4) == 0) || (strncmp(tmp_str, "SIN(", 4) == 0)) { // exp or sin
+
+									if (strchr(tmp_str, ',') != NULL)
+										strchr(tmp_str, ',')[0] = '\0';
+
+									if (parse_double(&v1, &tmp_str[4]) == 0) {
+										printf("Syntax error. Value (%s) cannot be converted to double\n", &token[3]);
+										exit(EXIT_FAILURE);
+									}
+								}
+								else {  // parentheses open after a whitespace following the function name
+
+									// parse i1
+									token = strtok(NULL, delim);
+
+									strcpy(tmp_str, token);
+									if (strchr(tmp_str, ',') != NULL)
+										strchr(tmp_str, ',')[0] = '\0';
+
+									if (parse_double(&v1, &tmp_str[1]) == 0) {
+										printf("Syntax error. Value (%s) cannot be converted to double\n", token);
+										exit(EXIT_FAILURE);
+									}
+								}
+
 
 								// parse i2 (for exp and pulse) or ia (for sin)
 								token = strtok(NULL, delim);
-								if (parse_double(&v2, token) == 0) {
+
+								strcpy(tmp_str, token);
+								if (strchr(tmp_str, ',') != NULL)
+									strchr(tmp_str, ',')[0] = '\0';
+
+								if (parse_double(&v2, tmp_str) == 0) {
 									printf("Syntax error. Value (%s) cannot be converted to double\n", token);
 									exit(EXIT_FAILURE);
 								}
+
 
 								// parse td1 (exp) or fr (sin) or td (pulse)
 								token = strtok(NULL, delim);
-								if (parse_double(&v3, token) == 0) {
+
+								strcpy(tmp_str, token);
+								if (strchr(tmp_str, ',') != NULL)
+									strchr(tmp_str, ',')[0] = '\0';
+
+								if (parse_double(&v3, tmp_str) == 0) {
 									printf("Syntax error. Value (%s) cannot be converted to double\n", token);
 									exit(EXIT_FAILURE);
 								}
+
+
 
 								// parse tc1 (exp) or td (sin) or tr (pulse)
 								token = strtok(NULL, delim);
-								if (parse_double(&v4, token) == 0) {
+
+								strcpy(tmp_str, token);
+								if (strchr(tmp_str, ',') != NULL)
+									strchr(tmp_str, ',')[0] = '\0';
+
+								if (parse_double(&v4, tmp_str) == 0) {
 									printf("Syntax error. Value (%s) cannot be converted to double\n", token);
 									exit(EXIT_FAILURE);
 								}
 
+
 								// parse td2 (exp) or df (sin) or tf (pulse)
 								token = strtok(NULL, delim);
-								if (parse_double(&v5, token) == 0) {
+
+								strcpy(tmp_str, token);
+								if (strchr(tmp_str, ',') != NULL)
+									strchr(tmp_str, ',')[0] = '\0';
+
+								if (parse_double(&v5, tmp_str) == 0) {
 									printf("Syntax error. Value (%s) cannot be converted to double\n", token);
 									exit(EXIT_FAILURE);
 								}
+
 
 								// parse the last arguments
 								if (tr_type == TR_TYPE_EXP) {  // exp function
@@ -859,19 +1035,22 @@ void parse_cir(char *filename) {
 									// parse tc2 (this is the 6th and last argument of exp function)
 									token = strtok(NULL, delim);
 
+									strcpy(tmp_str, token);
+									if (strchr(tmp_str, ',') != NULL)
+										strchr(tmp_str, ',')[0] = '\0';
+
 									// check for ')'
-									if (strchr(token, ')') == NULL) {
+									if (strchr(tmp_str, ')') == NULL) {
 										printf("Error. Parenthesis must close directly after value (%s)\n",\
 										token);
 										exit(EXIT_FAILURE);
 									}
 
-									token[strlen(token)-1] = '\0'; // get rid of ')'
-									if (parse_double(&v6, token) == 0) {
-										printf("Error. Value (%s) cannot be converted to double\n", token);
+									tmp_str[strlen(tmp_str)-1] = '\0'; // get rid of ')'
+									if (parse_double(&v6, tmp_str) == 0) {
+										printf("Error. Value (%s) cannot be converted to double\n", tmp_str);
 										exit(EXIT_FAILURE);
 									}
-									token[strlen(token)] = ')';    // recover previously deleted ')'
 
 
 									// check if there is another argument (syntax error)
@@ -887,19 +1066,22 @@ void parse_cir(char *filename) {
 									// parse tc2 (this is the 6th and last argument of sin function)
 									token = strtok(NULL, delim);
 
+									strcpy(tmp_str, token);
+									if (strchr(tmp_str, ',') != NULL)
+										strchr(tmp_str, ',')[0] = '\0';
+
 									// check for ')'
-									if (strchr(token, ')') == NULL) {
+									if (strchr(tmp_str, ')') == NULL) {
 										printf("Error. Parenthesis must close directly after value (%s)\n",\
 										token);
 										exit(EXIT_FAILURE);
 									}
 
-									token[strlen(token)-1] = '\0'; // get rid of ')'
-									if (parse_double(&v6, token) == 0) {
+									tmp_str[strlen(tmp_str)-1] = '\0'; // get rid of ')'
+									if (parse_double(&v6, tmp_str) == 0) {
 										printf("Error. Value (%s) cannot be converted to double\n", token);
 										exit(EXIT_FAILURE);
 									}
-									token[strlen(token)] = ')';    // recover previously deleted ')'
 
 
 									// check if there is another argument (syntax error)
@@ -915,27 +1097,36 @@ void parse_cir(char *filename) {
 
 									// parse pw (this is the 6th argument of pulse function)
 									token = strtok(NULL, delim);
-									if (parse_double(&v6, token) == 0) {
+
+									strcpy(tmp_str, token);
+									if (strchr(tmp_str, ',') != NULL)
+										strchr(tmp_str, ',')[0] = '\0';
+
+									if (parse_double(&v6, tmp_str) == 0) {
 										printf("Error. Value (%s) cannot be converted to double\n", token);
 										exit(EXIT_FAILURE);
 									}
 
+
 									// parse per (this is the 7th and last argument of pulse function)
 									token = strtok(NULL, delim);
 
+									strcpy(tmp_str, token);
+									if (strchr(tmp_str, ',') != NULL)
+										strchr(tmp_str, ',')[0] = '\0';
+
 									// check for ')'
-									if (strchr(token, ')') == NULL) {
+									if (strchr(tmp_str, ')') == NULL) {
 										printf("Error. Parenthesis must close directly after value (%s)\n",\
 										token);
 										exit(EXIT_FAILURE);
 									}
 
-									token[strlen(token)-1] = '\0';	// get rid of ')'
-									if (parse_double(&v7, token) == 0) {
+									tmp_str[strlen(tmp_str)-1] = '\0';	// get rid of ')'
+									if (parse_double(&v7, tmp_str) == 0) {
 										printf("Error. Value (%s) cannot be converted to double\n", token);
 										exit(EXIT_FAILURE);
 									}
-									token[strlen(token)] = ')';		// recover previously deleted ')'
 
 
 									// check if there is another argument (syntax error)
@@ -944,13 +1135,20 @@ void parse_cir(char *filename) {
 										printf("Error. Too many fields in transient function\n");
 										exit(EXIT_FAILURE);
 									}
-								}
 
+									// check if the period of the pulse if not big enough
+									// td + per must be bigger than td + tr + tf + pw
+									if ((v3 + v7) < (v3 + v4 + v5 + v6)) {
+										printf(RED "Error: " NRM "Pulse period not big enough\n");
+										exit(EXIT_FAILURE);
+									}
+								}
 
 								// print the parsed arguments
 								printf("arg1=%lf, arg2=%lf, arg3=%lf, arg4=%lf, "
 									   "arg5=%lf, arg6=%lf, arg7=%lf\n", \
 										v1, v2, v3, v4, v5, v6, v7);
+
 
 							}
 							else {

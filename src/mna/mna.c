@@ -40,6 +40,9 @@ csn *csn_N = NULL;
 
 // used for transient analysis
 cs *triplet_C = NULL;
+cs *compr_col_C = NULL;
+cs *compr_col_G = NULL;
+cs *compr_col_temp = NULL;
 
 // variables used for Trans
 double *B_vector = NULL;
@@ -81,8 +84,8 @@ void decomp_lu() {
 	if (is_sparse) {
 		css_S = cs_sqr(2, compr_col_A, 0);
 		csn_N = cs_lu(compr_col_A, css_S, 1);
-		cs_spfree(compr_col_A);
-		compr_col_A = NULL;
+		/*cs_spfree(compr_col_A);*/
+		//compr_col_A = NULL;
 	}
 	else {
 
@@ -103,8 +106,8 @@ void decomp_cholesky() {
 	if (is_sparse) {
 		css_S = cs_schol(1, compr_col_A);
 		csn_N = cs_chol(compr_col_A, css_S);
-		cs_spfree(compr_col_A);
-		compr_col_A = NULL;
+		/*cs_spfree(compr_col_A);*/
+		/*compr_col_A = NULL;*/
 	}
 	else {
 		// gsl_x_vector = gsl_vector_alloc(mna_dimension_size);
@@ -196,7 +199,6 @@ void initialise_iter_methods() {
 void solve_lu() {
 	unsigned long i;
 	double *x;
-
 
 
 	if (is_sparse) {
@@ -922,6 +924,13 @@ void execute_commands() {
 				// it is guaranteed that at this point is_trans is set to 1
 				reset_MNA_array();
 
+				if ((is_sparse) && ((solver_type == LU_SOLVER) || (solver_type == CHOL_SOLVER))) {
+					if (css_S)
+						cs_sfree(css_S);
+					if (csn_N)
+						cs_nfree(csn_N);
+				}
+
 				// free everything first as the decomposition and initialisation allocations
 				// will be performed again
 
@@ -940,6 +949,10 @@ void execute_commands() {
 					case CG_SOLVER:
 					case BI_CG_SOLVER:
 						free_gsl_vectors();
+						if (p_vector)
+							free(p_vector);
+						if (q_vector)
+							free(q_vector);
 						initialise_iter_methods();
 						break;
 					default:
@@ -956,27 +969,15 @@ void execute_commands() {
 
 				for (j=start; j < end + 0.000000001; j = j + jump) {
 
-					if ( (is_sparse) && ((solver_type == 0)||( solver_type ==1)) ) {
-						// restore default b vector values
-						memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
-						if( (idx1+1) != 0 ) {
-							mna_vector[idx1] += var->op_point_val;
-							mna_vector[idx1] -= j;			// add new value to b vector
-						}
-						if( (idx2+1) != 0 ) {
-							mna_vector[idx2] -= var->op_point_val;
-							mna_vector[idx2] += j;			// add new value to b vector
-						}
+					// restore default b vector values
+					memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
+					if( (idx1+1) != 0 ) {
+						mna_vector[idx1] += var->op_point_val;
+						mna_vector[idx1] -= j;			// add new value to b vector
 					}
-					else {
-						if( (idx1+1) != 0 ){
-							mna_vector[idx1] += var->value;	// eliminate old value from b vector
-							mna_vector[idx1] -= j;			// add new value to b vector
-						}
-						if( (idx2+1) != 0 ){
-							mna_vector[idx2] -= var->value;	// eliminate old value from b vector
-							mna_vector[idx2] += j;			// add new value to b vector
-						}
+					if( (idx2+1) != 0 ) {
+						mna_vector[idx2] -= var->op_point_val;
+						mna_vector[idx2] += j;			// add new value to b vector
 					}
 
 					var->value = j;
@@ -1001,32 +1002,11 @@ void execute_commands() {
 					fprintf(node_fp, "%lf\t\t%e\n", j, node->val);
 				}
 
-				if ( (is_sparse) && ((solver_type == 0)||( solver_type ==1)) ){
-					// restore default b vector values
-					memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
-				}
-				else {
-					if( (idx1+1) != 0 ){
-						mna_vector[idx1] += var->value;	// eliminate old value from b vector
-						mna_vector[idx1] -= var->op_point_val;			// add new value to b vector
-					}
-					if( (idx2+1) != 0 ){
-						mna_vector[idx2] -= var->value;	// eliminate old value from b vector
-						mna_vector[idx2] += var->op_point_val;			// add new value to b vector
-					}
-				}
-
-				var->value = var->op_point_val;
-
 			}
 			else {  // it is guaranteed that var_found == 2
 				for (j=start; j < end + 0.00000001; j = j + jump) {
 
-					// position in list is unique
-					if ( (is_sparse) && ((solver_type == 0)||( solver_type ==1)) ){
-						// restore default b vector values
-						memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
-					}
+					memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
 
 					mna_vector[idx1] = j;
 					var->value = j;
@@ -1052,15 +1032,12 @@ void execute_commands() {
 					fprintf(node_fp, "%lf\t\t%e\n", j, node->val);
 				}
 
-				if ( (is_sparse) && ((solver_type == 0)||( solver_type ==1)) ){
-					// restore default b vector values
-					memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
-				}
-				else
-					mna_vector[idx1] = var->op_point_val;
-
-				var->value = var->op_point_val;
 			}
+
+			// restore default b vector values
+			memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
+			var->value = var->op_point_val;
+
 
 			fprintf(fp_draw, "gnuplot -e \"set terminal png size 1024, 1024;");
 			fprintf(fp_draw, "set output \\\"%s_DC_%s.png\\\";",node_name,var_name);
@@ -1076,6 +1053,9 @@ void execute_commands() {
 			free(filename);
 			node_name = NULL;
 			filename = NULL;
+
+			//memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
+			gsl_vector_memcpy(gsl_x_vector, default_X_vector_copy);
 		}
 		if (strncmp(command_list[i], ".TRAN ", 6) == 0) {
 
@@ -1211,14 +1191,33 @@ void execute_commands() {
 				// it is guaranteed that at this point is_trans is set to 1
 
 
-				//memcpy(G_array, mna_array, ((mna_dimension_size * mna_dimension_size) * sizeof(double)));
+				// this function also handles sparse matrices
 				create_trans_MNA_array();
-				printf("G Array\n\n");
-				print_G_array();
-				printf("C Array\n\n");
-				print_C_array();
-				printf(" G_array + (factor * C Array)\n\n");
-				print_MNA_array();
+
+				if ((is_sparse) && ((solver_type == LU_SOLVER) || (solver_type == CHOL_SOLVER))) {
+					if (css_S)
+						cs_sfree(css_S);
+					if (csn_N)
+						cs_nfree(csn_N);
+				}
+
+				if (is_sparse) {
+					printf("G Array (compressed column)\n\n");
+					print_sparse_matrix(compr_col_G);
+					printf("C Array (compressed column)\n\n");
+					print_sparse_matrix(compr_col_C);
+					printf(" G_Array + factor * C_Array (compressed column)\n\n");
+					print_sparse_matrix(compr_col_A);
+				}
+				else {
+					printf("G Array\n\n");
+					print_G_array();
+					printf("C Array\n\n");
+					print_C_array();
+					printf("G_Array + factor * C Array\n\n");
+					print_MNA_array();
+				}
+
 				// free everything first as the decomposition and initialisation allocations
 				// will be performed again
 
@@ -1237,7 +1236,12 @@ void execute_commands() {
 					case CG_SOLVER:
 					case BI_CG_SOLVER:
 						free_gsl_vectors();
+						if (p_vector)
+							free(p_vector);
+						if (q_vector)
+							free(q_vector);
 						initialise_iter_methods();
+
 						break;
 					default:
 						printf(RED "Error uknown solver type specified..\n" NRM);
@@ -1251,13 +1255,13 @@ void execute_commands() {
 			gsl_vector_memcpy(gsl_old_x_vector,gsl_x_vector);
 
 
-			double *copy_mna_vector = (double *)calloc(mna_dimension_size,sizeof(double));
-
 
 			memcpy(old_mna_vector,default_mna_vector_copy,mna_dimension_size*sizeof(double));
 
 			for (j=0; j < end_time + 0.00000001; j = j + timestep) {
-				for(k = 0; k < Trans_list.size; k++){
+				memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
+
+				for(k = 0; k < Trans_list.size; k++) {
 
 					switch (Trans_list.list[k]->tr_type) {
 						case TR_TYPE_PWL:
@@ -1288,36 +1292,17 @@ void execute_commands() {
 							idx2 = var->node_minus->id -1;
 
 
-							if ( (is_sparse) && ((solver_type == 0)||( solver_type ==1)) ) {
-								// restore default b vector values
-								memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
-								if( (idx1+1) != 0 ) {
-									mna_vector[idx1] += var->op_point_val;
-									mna_vector[idx1] -= trans_value; // add new value to b vector
-								}
-								if( (idx2+1) != 0 ) {
-									mna_vector[idx2] -= var->op_point_val;
-									mna_vector[idx2] += trans_value; // add new value to b vector
-								}
+							// restore default b vector values
+							if( (idx1+1) != 0 ) {
+								mna_vector[idx1] += var->op_point_val;
+								mna_vector[idx1] -= trans_value; // add new value to b vector
 							}
-							else {
-								if( (idx1+1) != 0 ){
-									mna_vector[idx1] += var->value;	// eliminate old value from b vector
-									mna_vector[idx1] -= trans_value; // add new value to b vector
-								}
-								if( (idx2+1) != 0 ){
-									mna_vector[idx2] -= var->value;	 // eliminate old value from b vector
-									mna_vector[idx2] += trans_value; // add new value to b vector
-								}
+							if( (idx2+1) != 0 ) {
+								mna_vector[idx2] -= var->op_point_val;
+								mna_vector[idx2] += trans_value; // add new value to b vector
 							}
-
-
 
 							var->value = trans_value;
-
-							// TODO TODO
-							// solve here and print to file
-
 
 						break;
 						case V:
@@ -1325,9 +1310,7 @@ void execute_commands() {
 							var = Trans_list.list[k];
 							idx1 = Trans_list.k[k] + total_ids - 1;
 
-
 							//memcpy(mna_vector, default_mna_vector_copy, mna_dimension_size*sizeof(double));
-
 
 							mna_vector[idx1] = trans_value;
 							var->value = trans_value;
@@ -1337,7 +1320,6 @@ void execute_commands() {
 						default:
 							break;
 					}
-
 
 				}
 
@@ -1358,38 +1340,73 @@ void execute_commands() {
 
 
 				memset(B_vector,0,mna_dimension_size*sizeof(double));
+
+				/*printf("j = %lf\n", j);*/
+				/*for (int p = 0; p < mna_dimension_size; p++)*/
+					/*printf("%d: %lf, \t%lf \t(old | new)\n", p, old_mna_vector[p], mna_vector[p]);*/
+				/*printf("\n");*/
+
 				if(tr_method == BACKWARD_EULER) {
 
-					for(k=0; k < mna_dimension_size; k++){
-
-						for(l=0; l < mna_dimension_size; l++){
-							B_vector[k] = B_vector[k] + C_array[mna_dimension_size*k + l]*gsl_vector_get(gsl_old_x_vector,l);
+					if(is_sparse){
+						if (cs_gaxpy(compr_col_C, gsl_old_x_vector->data, B_vector) == 0) {
+							printf("Error in cs_gaxpy. Exiting..\n");
+							exit(EXIT_FAILURE);
 						}
-						B_vector[k] = mna_vector[k] + (1/timestep)* B_vector[k];
-					}
-					gsl_vector_memcpy(gsl_old_x_vector,gsl_x_vector);
-
-				} else {
-
-					for(k=0; k < mna_dimension_size; k++) {
-
-						for(l=0; l < mna_dimension_size; l++) {
-							B_vector[k] = B_vector[k] + (G_array[mna_dimension_size*k + l] \
-								- (2/timestep)*C_array[mna_dimension_size*k + l])*gsl_vector_get(gsl_old_x_vector,l);
+						for(k=0; k < mna_dimension_size; k++){
+							B_vector[k] = mna_vector[k] + (1/timestep)* B_vector[k];
 						}
 
-						B_vector[k] = mna_vector[k] + old_mna_vector[k] - B_vector[k];
 					}
+					else {
+						for(k=0; k < mna_dimension_size; k++){
+							// no need to iterate k when it is sparse (!?)
+							for(l=0; l < mna_dimension_size; l++){
+								B_vector[k] = B_vector[k] \
+											+ C_array[mna_dimension_size*k + l] \
+											* gsl_vector_get(gsl_old_x_vector,l);
+							}
+
+							B_vector[k] = mna_vector[k] + (1/timestep)* B_vector[k];
+						}
+					}
+				}
+				else {
 
 
-					gsl_vector_memcpy(gsl_old_x_vector,gsl_x_vector);
-					memcpy(old_mna_vector,mna_vector,mna_dimension_size*sizeof(double));
+					if(is_sparse){
+						compr_col_temp = cs_add(compr_col_G, compr_col_C,1,-1*(2/timestep));
 
+						// B = (G + (2/h)*C)*x_old
+						if (cs_gaxpy(compr_col_temp,gsl_old_x_vector->data,B_vector) == 0) {
+							printf("Error. in cs_gaxpy. Exiting..\n");
+							exit(EXIT_FAILURE);
+						}
 
+						cs_spfree(compr_col_temp);
+						for(k=0; k < mna_dimension_size; k++) {
+							B_vector[k] = mna_vector[k] + old_mna_vector[k] - B_vector[k];
+						}
+					}
+					else {
+
+						for(k=0; k < mna_dimension_size; k++) {
+
+							for(l=0; l < mna_dimension_size; l++) {
+								B_vector[k] = B_vector[k] \
+									+ (G_array[mna_dimension_size*k + l] \
+									- (2/timestep)*C_array[mna_dimension_size*k + l]) \
+									* gsl_vector_get(gsl_old_x_vector,l);
+							}
+
+							B_vector[k] = mna_vector[k] + old_mna_vector[k] - B_vector[k];
+						}
+					}
 				}
 
 
-				memcpy(copy_mna_vector,mna_vector,mna_dimension_size*sizeof(double));
+				gsl_vector_memcpy(gsl_old_x_vector,gsl_x_vector);
+				memcpy(old_mna_vector,mna_vector,mna_dimension_size*sizeof(double));
 				memcpy(mna_vector,B_vector,mna_dimension_size*sizeof(double));
 
 
@@ -1410,7 +1427,9 @@ void execute_commands() {
 						break;
 				}
 
-				memcpy(mna_vector,copy_mna_vector,mna_dimension_size*sizeof(double));
+				if ((is_sparse) && ((solver_type == LU_SOLVER) || (solver_type == CHOL_SOLVER))) {
+					memcpy(gsl_x_vector->data, mna_vector, mna_dimension_size*sizeof(double));
+				}
 
 				fprintf(node_fp, "%lf\t\t%e\n", j, node->val);
 
@@ -1422,7 +1441,7 @@ void execute_commands() {
 
 			}
 
-			gsl_vector_memcpy(gsl_x_vector,default_X_vector_copy);
+			gsl_vector_memcpy(gsl_x_vector, default_X_vector_copy);
 			memcpy(mna_vector,default_mna_vector_copy,mna_dimension_size*sizeof(double));
 
 			gsl_vector_free(gsl_old_x_vector);
@@ -1442,7 +1461,6 @@ void execute_commands() {
 			fclose(fp_draw);
 			free(filename);
 			free(node_name);
-			free(copy_mna_vector);
 
 
 		}
@@ -1463,33 +1481,43 @@ void execute_commands() {
 
 
 
-// TODO if is sparse then...
+// calculate A = G + factor*C
 void create_trans_MNA_array() {
 	unsigned long i, j;
 
-
-
-	if (tr_method == BACKWARD_EULER){
-
+	if (tr_method == BACKWARD_EULER)
 		factor = 1/timestep;
-	}
-	else{
-
+	else
 		factor = 2/timestep;
-	}
 
-	for (i=0; i < mna_dimension_size; i++) {
-		for (j=0; j < mna_dimension_size; j++) {
-			mna_array[i*mna_dimension_size + j] = G_array[i*mna_dimension_size +j]
-												+ factor * C_array[i*mna_dimension_size + j];
+	if (is_sparse) {
+		if (compr_col_A)
+			cs_spfree(compr_col_A);
+		compr_col_A = NULL;
+		compr_col_A = cs_add(compr_col_G, compr_col_C, 1, factor);
+	}
+	else {
+		for (i=0; i < mna_dimension_size; i++) {
+			for (j=0; j < mna_dimension_size; j++) {
+				mna_array[i*mna_dimension_size + j] = G_array[i*mna_dimension_size +j] \
+													+ factor * C_array[i*mna_dimension_size + j];
+			}
 		}
 	}
-
 }
 
 
+// resets the mna array to the initial DC array (aka G array)
 void reset_MNA_array() {
-	memcpy(mna_array, G_array, (mna_dimension_size * mna_dimension_size * sizeof(double)));
+	if (is_sparse) {
+		if (compr_col_A)
+			cs_spfree(compr_col_A);
+		compr_col_A = NULL;
+		compr_col_A = cs_add(compr_col_G, compr_col_G, 1, 0);
+	}
+	else {
+		memcpy(mna_array, G_array, (mna_dimension_size * mna_dimension_size * sizeof(double)));
+	}
 }
 
 
@@ -1545,6 +1573,29 @@ void create_compressed_column() {
 
 
 
+void create_compressed_column_C_array() {
+	//printf("\n\n\n\n\n\n\\n\n\n\n\n");
+	compr_col_C = cs_compress(triplet_C);
+	cs_dupl(compr_col_C);
+	cs_spfree(triplet_C);
+	triplet_C = NULL;
+}
+
+
+void create_G() {
+	// Warning. cs_add allocates memory
+
+	// this adds an extra element with ZERO VALUE (or almost zero) [problematic]
+	// this probably happens due to double precision rounding errors
+	/*compr_col_G = cs_add(compr_col_A, compr_col_C, 1, 0);*/
+
+	compr_col_G = cs_add(compr_col_A, compr_col_A, 1, 0);
+	if (compr_col_G == NULL) {
+		printf("Error in cs_add\n");
+		exit(EXIT_FAILURE);
+	}
+}
+
 
 void init_triplet() {
 	unsigned long i;
@@ -1552,6 +1603,7 @@ void init_triplet() {
 	unsigned long node_minus_idx;
 	double component_value;
 	int nz = 0;
+	int nz_C = 0;
 	int ret;
 
 	// this global is used inside cs_spalloc
@@ -1563,17 +1615,20 @@ void init_triplet() {
 		exit(EXIT_FAILURE);
 	}
 
-	default_mna_vector_copy = (double *) calloc(mna_dimension_size, sizeof(double));
-	if (default_mna_vector_copy == NULL) {
-		printf("Error. Memory allocation problems. Exiting..\n");
-		exit(EXIT_FAILURE);
-	}
 
 	// create triplet with initial nz set to 1
 	triplet_A = cs_spalloc(mna_dimension_size, mna_dimension_size, 1, 1, 1);
 	if (triplet_A == NULL) {
 		printf("Error. Memory allocation problems. Exiting..\n");
 		exit(EXIT_FAILURE);
+	}
+
+	if (is_trans) {
+		triplet_C = cs_spalloc(mna_dimension_size, mna_dimension_size, 1, 1, 1);
+		if (triplet_C == NULL) {
+			printf("Error. Memory allocation problems. Exiting..\n");
+			exit(EXIT_FAILURE);
+		}
 	}
 
 
@@ -1660,18 +1715,85 @@ void init_triplet() {
 				// underflow handling
 				if ((node_minus_idx + 1) != 0){
 					// vector[<->] -> +sk
-					default_mna_vector_copy[node_minus_idx] += component_value;
 					mna_vector[node_minus_idx] += component_value;
 				}
 
 				// underflow handling
 				if ((node_plus_idx + 1) != 0){
 					// vector[<+>] -> -sk
-					default_mna_vector_copy[node_plus_idx] -= component_value;
 					mna_vector[node_plus_idx] -= component_value;
 				}
 				break;
 			case C:		// ignored at DC analysis
+				if (is_trans) {
+
+					if ( ((node_plus_idx + 1) == 0) && ((node_minus_idx + 1 != 0)) ) {
+						nz_C++;
+
+						// do sprealloc
+						ret = cs_sprealloc(triplet_C, nz_C);
+						if (ret == 0) {
+							printf("Error. Memory allocation problems. Exiting..\n");
+							exit(EXIT_FAILURE);
+						}
+
+						triplet_C->i[nz_C-1] = node_minus_idx;
+						triplet_C->p[nz_C-1] = node_minus_idx;
+						triplet_C->x[nz_C-1] = component_value;
+
+						// array[<->][<->] -> +gk
+
+					} else if ( ((node_minus_idx + 1) == 0) && ((node_plus_idx + 1) != 0) ) {
+						nz_C++;
+
+						// do sprealloc
+						ret = cs_sprealloc(triplet_C, nz_C);
+						if (ret == 0) {
+							printf("Error. Memory allocation problems. Exiting..\n");
+							exit(EXIT_FAILURE);
+						}
+
+						triplet_C->i[nz_C-1] = node_plus_idx;
+						triplet_C->p[nz_C-1] = node_plus_idx;
+						triplet_C->x[nz_C-1] = component_value;
+
+						// array[<+>][<+>] -> +gk
+					} else if ( ((node_plus_idx +1) != 0) && ((node_minus_idx + 1) != 0) ) {
+						nz_C += 4;
+
+						// do sprealloc
+						ret = cs_sprealloc(triplet_C, nz_C);
+						if (ret == 0) {
+							printf("Error. Memory allocation problems. Exiting..\n");
+							exit(EXIT_FAILURE);
+						}
+
+						triplet_C->i[nz_C-4] = node_plus_idx;
+						triplet_C->p[nz_C-4] = node_plus_idx;
+						triplet_C->x[nz_C-4] = component_value;
+						// array[<+>][<+>] -> +gk
+						/*mna_array[node_plus_idx * mna_dimension_size + node_plus_idx] += 1/component_value;*/
+
+						triplet_C->i[nz_C-3] = node_minus_idx;
+						triplet_C->p[nz_C-3] = node_minus_idx;
+						triplet_C->x[nz_C-3] = component_value;
+						// array[<->][<->] -> +gk
+						/*mna_array[node_minus_idx * mna_dimension_size + node_minus_idx] += 1/component_value;*/
+
+						triplet_C->i[nz_C-2] = node_plus_idx;
+						triplet_C->p[nz_C-2] = node_minus_idx;
+						triplet_C->x[nz_C-2] = -1*component_value;
+						// array[<+>][<->] -> -gk
+						/*mna_array[node_plus_idx * mna_dimension_size + node_minus_idx] -= 1/component_value;*/
+
+						triplet_C->i[nz_C-1] = node_minus_idx;
+						triplet_C->p[nz_C-1] = node_plus_idx;
+						triplet_C->x[nz_C-1] = -1*component_value;
+						// array[<->][<+>] -> -gk
+						/*mna_array[node_minus_idx * mna_dimension_size + node_plus_idx] -= 1/component_value;*/
+					}
+
+				}
 				break;
 			default:
 				printf("Unknown type (%d) in list1\n", team1_list.list[i].type);
@@ -1692,7 +1814,6 @@ void init_triplet() {
 			case V:
 				// vector[k] -> +sk
 				// ... where k = (total_ids-1+i) = (n-1+i)
-				default_mna_vector_copy[(total_ids-1+i)] += component_value;
 				mna_vector[(total_ids-1+i)] += component_value;
 
 				// NOTE: NO BREAK HERE!!!!!
@@ -1746,6 +1867,21 @@ void init_triplet() {
 				}
 				// vector[k] -> 0
 				// ... where k = (total_ids-1+i) = (n-1+i)
+
+				if (is_trans && (team2_list.list[i].type == L)) {
+					// C_array[k][k] -> Lk
+					nz_C++;
+
+					ret = cs_sprealloc(triplet_C, nz_C);
+					if (ret == 0) {
+						printf("Error. Memory allocation problems. Exiting..\n");
+						exit(EXIT_FAILURE);
+					}
+
+					triplet_C->i[nz_C-1] = total_ids-1+i;
+					triplet_C->p[nz_C-1] = total_ids-1+i;
+					triplet_C->x[nz_C-1] = component_value;
+				}
 				break;
 
 			// these cases are here because of the optional .spice I R C field G2
@@ -1763,6 +1899,11 @@ void init_triplet() {
 
 	printf("Before Assignment: (nz, nzmax) = (%d, %d)\n", triplet_A->nz, triplet_A->nzmax);
 	triplet_A->nz = nz;
+
+	if (is_trans) {
+		triplet_C->nz = nz_C;
+	}
+
 }
 
 
@@ -1981,7 +2122,6 @@ void fill_MNA_system() {
 }
 
 void free_gsl_vectors(){
-
 
 	gsl_vector_free(gsl_M_array);
 	gsl_M_array = NULL;
