@@ -215,7 +215,6 @@ void freeHashTable(){
 			prev->name = NULL;
 			free(prev);
 			prev = NULL;
-
 		}
 
 	}

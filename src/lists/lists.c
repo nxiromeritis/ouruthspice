@@ -206,6 +206,10 @@ void free_lists(){
 			// free exp data as tran spec is a union of pointers
 			free(team1_list.list[i].tran_spec.data);
 		}
+
+		if (team1_list.list[i].ac_usability == AC_USABLE) {
+			free(team1_list.list[i].ac_spec.data);
+		}
 	}
 	free(team1_list.list);
 	team1_list.size = 0;
@@ -223,6 +227,10 @@ void free_lists(){
 			/*printf("TR_TYPE = %d\n", team2_list.list[i].tr_type);*/
 			// free exp data as tran spec is a union of pointers
 			free(team2_list.list[i].tran_spec.data);
+		}
+
+		if (team2_list.list[i].ac_usability == AC_USABLE) {
+			free(team2_list.list[i].ac_spec.data);
 		}
 	}
 	free(team2_list.list);

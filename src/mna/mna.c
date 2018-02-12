@@ -1693,6 +1693,7 @@ void execute_commands() {
 			double step = ((end_freq - start_freq) / ac_points);
 			for (freq=start_freq; freq < end_freq + 0.000000001; freq = freq + step) {
 				fill_AC_MNA_array();
+				print_complex_mna();
 
 				if (is_sparse) {
 					printf("Sparse methods are not supported into this version\n");
@@ -1705,6 +1706,7 @@ void execute_commands() {
 				}
 				switch(solver_type) {
 					case LU_SOLVER:
+						gsl_permutation_free(gsl_p);
 						decomp_complex_lu();
 						solve_complex_lu();
 						break;
@@ -1720,24 +1722,30 @@ void execute_commands() {
 				phase = atan(node->img_val / node->real_val);
 				mag = sqrt(pow(node->img_val, 2) + pow(node->real_val, 2));
 
-				fprintf(node_fp, "%lf\t\t%e\n", j, phase);
-				fprintf(node_fp2, "%lf\t\t%e\n", j, mag);
+				fprintf(node_fp, "%lf\t\t%e\n", freq, phase);
+				fprintf(node_fp2, "%lf\t\t%e\n", freq, mag);
 
 			}
 			//Draw plot
 
-			fprintf(fp_draw, "gnuplot -e \"set terminal png size 1024, 1024;");
+			fprintf(fp_draw, "gnuplot -e \"set terminal png size 1024, 1024;\n");
+			fprintf(fp_draw, "set grid;\n");
 			
-			fprintf(fp_draw, "set output \\\"%s_AC_Phase.png\\\";",node_name);
-			fprintf(fp_draw, "plot \\\"%s\\\" using 1:2 with linespoints;\"\n", filename);
-			// redirect sterr to stdout and redirect stdout to /dev/null to avoid viewing xdg-open warnings
-			fprintf(fp_draw, "xdg-open \"%s_AC_Phase.png\" > /dev/null 2>&1\n",node_name);
+			// fprintf(fp_draw, "set output \\\"%s_AC_Phase.png\\\";",node_name);
+			// fprintf(fp_draw, "plot \\\"%s\\\" using 1:2 with linespoints;\"\n", filename);
+			// // redirect sterr to stdout and redirect stdout to /dev/null to avoid viewing xdg-open warnings
+			// fprintf(fp_draw, "xdg-open \"%s_AC_Phase.png\" > /dev/null 2>&1\n",node_name);
 			
-			fprintf(fp_draw, "set output \\\"%s_AC_MAG.png\\\";",node_name);
-			fprintf(fp_draw, "plot \\\"%s\\\" using 1:2 with linespoints;\"\n", filename2);
-			// redirect sterr to stdout and redirect stdout to /dev/null to avoid viewing xdg-open warnings
-			fprintf(fp_draw, "xdg-open \"%s_AC_MAG.png\" > /dev/null 2>&1\n",node_name);
+			// fprintf(fp_draw, "set output \\\"%s_AC_MAG.png\\\";",node_name);
+			// fprintf(fp_draw, "plot \\\"%s\\\" using 1:2 with linespoints;\"\n", filename2);
+			// // redirect sterr to stdout and redirect stdout to /dev/null to avoid viewing xdg-open warnings
+			// fprintf(fp_draw, "xdg-open \"%s_AC_MAG.png\" > /dev/null 2>&1\n",node_name);
 
+			fprintf(fp_draw, "set output \\\"%s_AC.png\\\";\n",node_name);
+			fprintf(fp_draw, "plot \\\"%s\\\" using 1:2 with linespoints,\n", filename2);
+			fprintf(fp_draw, " \\\"%s\\\" using 1:2 with linespoints;\"\n", filename);
+			// fprintf(fp_draw, "set output;\n \"");
+			fprintf(fp_draw, "xdg-open \"%s_AC.png\" > /dev/null 2>&1\n",node_name);
 
 			fclose(node_fp);
 			fclose(node_fp2);
@@ -2376,7 +2384,7 @@ void fill_MNA_system() {
 	}
 
 	// MOVED INTO execute_commands function
-	if (is_trans) {
+	if (is_trans || is_ac) {
 		 memcpy(G_array, mna_array, ((mna_dimension_size * mna_dimension_size) * sizeof(double)));
 	
 	}
@@ -2441,9 +2449,15 @@ void free_MNA_system() {
 	//if (default_mna_vector_copy)
 		//free(default_mna_vector_copy);
 
-	if (is_trans) {
+	if (is_trans || is_ac) {
 		free(G_array);
 		G_array = NULL;
+	}
+	if (is_ac){
+		free(C_AC_array);
+		C_AC_array = NULL;
+	}
+	if (is_trans){
 		free(C_array);
 		C_array = NULL;
 	}
@@ -2545,6 +2559,56 @@ void print_G_array(){
 			}
 			for (j = (total_ids - 1); j < mna_dimension_size; j++){
 				printf(YEL "%.2lf " NRM, G_array[(i * mna_dimension_size) + j]);
+			}
+			putchar('\n');
+		}
+	}
+
+	printf("\n\n");
+}
+
+void print_complex_mna() {
+	unsigned long i, j;
+
+	for (i = 0; i < mna_dimension_size; i++){
+		if (i < (total_ids - 1)){
+			for (j = 0; j < (total_ids -1); j++){
+				printf(YEL "%.2lf " NRM, GSL_REAL(gsl_matrix_complex_get(gsl_complex_mna_array, i, j)));
+			}
+
+			for (j = (total_ids - 1); j < mna_dimension_size; j++){
+				printf(BLU "%.2lf " NRM, GSL_REAL(gsl_matrix_complex_get(gsl_complex_mna_array, i, j)));
+			}
+			putchar('\n');
+		}else{
+			for (j = 0; j < (total_ids -1); j++){
+				printf(BLU "%.2lf " NRM, GSL_REAL(gsl_matrix_complex_get(gsl_complex_mna_array, i, j)));
+			}
+			for (j = (total_ids - 1); j < mna_dimension_size; j++){
+				printf(GRN "%.2lf " NRM, GSL_REAL(gsl_matrix_complex_get(gsl_complex_mna_array, i, j)));
+			}
+			putchar('\n');
+		}
+	}
+
+	printf("\n\n");
+
+	for (i = 0; i < mna_dimension_size; i++){
+		if (i < (total_ids - 1)){
+			for (j = 0; j < (total_ids -1); j++){
+				printf(CYN "%.2lf " NRM, GSL_IMAG(gsl_matrix_complex_get(gsl_complex_mna_array, i, j)));
+			}
+
+			for (j = (total_ids - 1); j < mna_dimension_size; j++){
+				printf(WHT "%.2lf " NRM, GSL_IMAG(gsl_matrix_complex_get(gsl_complex_mna_array, i, j)));
+			}
+			putchar('\n');
+		}else{
+			for (j = 0; j < (total_ids -1); j++){
+				printf(WHT "%.2lf " NRM, GSL_IMAG(gsl_matrix_complex_get(gsl_complex_mna_array, i, j)));
+			}
+			for (j = (total_ids - 1); j < mna_dimension_size; j++){
+				printf(MAG "%.2lf " NRM, GSL_IMAG(gsl_matrix_complex_get(gsl_complex_mna_array, i, j)));
 			}
 			putchar('\n');
 		}

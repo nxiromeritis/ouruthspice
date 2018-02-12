@@ -127,4 +127,5 @@ void print_G_array();
 void init_AC_MNA_system();
 void fill_AC_MNA_array();
 void free_AC_MNA_array();
+void print_complex_mna();
 #endif
